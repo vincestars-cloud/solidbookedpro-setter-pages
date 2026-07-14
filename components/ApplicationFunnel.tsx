@@ -489,8 +489,8 @@ export function ApplicationFunnel({ config }: Props) {
       <main>
         {!started && !result ? (
           <section className="cover">
-            <div className="container cover-grid">
-              <div className="cover-main">
+            <div className="container cover-stack">
+              <header className="cover-headline">
                 <span className="eyebrow"><span className="dot" /> Remote opportunity</span>
                 <h1>Apply for Appointment Setter role.</h1>
                 <div className="role-tags" aria-label="Role details">
@@ -499,7 +499,24 @@ export function ApplicationFunnel({ config }: Props) {
                   <span className="role-tag">Paid training</span>
                   <span className="role-tag">Advancement path</span>
                 </div>
+              </header>
 
+              <nav className="application-nav" aria-label="Application navigation">
+                <ol>
+                  {["Tell us about yourself", "The sales process", "Founder video", "Listen, then role play", "Final questions and schedule interview"].map((item, index) => (
+                    <li key={item}>
+                      <span className="num">{index + 1}</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="application-nav-footer">
+                  <span>Set aside about 10 minutes and use a device with a working microphone.</span>
+                  <button className="btn btn-primary" onClick={beginApplication}>Begin application</button>
+                </div>
+              </nav>
+
+              <section className="copy-block" aria-label="Role overview">
                 <div className="cover-panel lead-panel">
                   <p className="kicker">What we do</p>
                   <h2>We help business owners get more customers and clients.</h2>
@@ -542,18 +559,29 @@ export function ApplicationFunnel({ config }: Props) {
                     <li>You have no rapport or sales training.</li>
                   </ul>
                 </div>
-              </div>
+              </section>
 
-              <aside className="start-card cover-start">
-                <h2>What to expect</h2>
-                <ol className="start-list">
-                  {["Tell us about yourself", "The sales process", "Founder video", "Listen, then role play", "Final questions and schedule interview"].map((item, index) => (
-                    <li key={item}><span className="num">{index + 1}</span><span><strong>{item}</strong><br /><small>{index === 3 ? "Three browser-based mock calls" : "Autosaved as you progress"}</small></span></li>
-                  ))}
-                </ol>
-                <div className="notice"><strong>Before you begin:</strong> Set aside about 10 minutes and use a device with a working microphone.</div>
-                <button className="btn btn-primary btn-wide" onClick={beginApplication}>Begin application</button>
-              </aside>
+              <section className="faq-block" aria-label="Frequently asked questions">
+                <h2>FAQ</h2>
+                <div className="faq-list">
+                  <details>
+                    <summary>What will I be doing day to day?</summary>
+                    <p>You will contact warm and cold business owners, build rapport, answer general questions, update the CRM, and book qualified appointments for the owner or closer.</p>
+                  </details>
+                  <details>
+                    <summary>What kind of prospects will I call?</summary>
+                    <p>About 40% are warm prospects who already raised their hand. About 60% are cold prospects we identified as likely needing help getting more customers.</p>
+                  </details>
+                  <details>
+                    <summary>How is the role paid?</summary>
+                    <p>The path starts with Website Setter at hourly pay plus $20 per qualified appointment booked, then Annuity Setter at hourly pay plus $100 per qualified appointment booked, then Annuity Closer at hourly pay plus $250 per sale.</p>
+                  </details>
+                  <details>
+                    <summary>What should I have ready before starting?</summary>
+                    <p>Use a quiet device with a working microphone and have your experience, availability, desired hourly pay, Vocaroo link, and past metrics ready.</p>
+                  </details>
+                </div>
+              </section>
             </div>
           </section>
         ) : (
