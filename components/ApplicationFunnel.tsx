@@ -588,11 +588,11 @@ export function ApplicationFunnel({ config }: Props) {
                   </details>
                   <details>
                     <summary>How is the role paid?</summary>
-                    <p>The path starts with Website Setter at hourly pay plus $20 per qualified appointment booked, then Annuity Setter at hourly pay plus $100 per qualified appointment booked, then Annuity Closer at hourly pay plus $250 per sale.</p>
+                    <p>The path starts with Website Appt Setter at hourly pay plus $20 per qualified appointment, then Lead Service Setter at hourly pay plus $100 per qualified appointment, then Lead Service Closer at hourly pay plus $250 per sale.</p>
                   </details>
                   <details>
                     <summary>What should I have ready before starting?</summary>
-                    <p>Use a quiet device with a working microphone and have your experience, availability, desired hourly pay, Vocaroo link, and past metrics ready.</p>
+                    <p>Use a quiet device with a working microphone and have your resume, experience, availability, desired hourly pay, Vocaroo link, and past metrics ready.</p>
                   </details>
                 </div>
               </section>
@@ -651,7 +651,7 @@ export function ApplicationFunnel({ config }: Props) {
                           updateField("resumeFileSize", (file?.size || 0) as any);
                         }} />
                         <Textarea id="crmPlatforms" label="What CRM or scheduling platforms have you used?" value={fields.crmPlatforms} onChange={(v) => updateField("crmPlatforms", v)} error={renderError("crmPlatforms")} full={false} compact />
-                        <Textarea id="appointmentSettingExperience" label="What is your appointment setting or cold calling experience have you had?" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} full={false} compact />
+                        <Textarea id="appointmentSettingExperience" label="What appointment-setting or cold-calling experience have you had?" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} full={false} compact />
                         <Textarea id="industries" label="What industries or offers have you worked with?" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} full={false} compact />
                         <Textarea id="pastMetrics" label="What are some of the past metrics that you had?" value={fields.pastMetrics} onChange={(v) => updateField("pastMetrics", v)} error={renderError("pastMetrics")} helper="Include specific numbers when possible, such as calls made, conversations, appointments booked, show rate, close rate, or quota performance." />
                       </div>
@@ -666,7 +666,7 @@ export function ApplicationFunnel({ config }: Props) {
                       <div className="roadmap">
                         <ol className="roadmap-list">
                           {[
-                            "We find a businesses that need our services.",
+                            "We find businesses that need our services.",
                             "We create the solution and send it to the business.",
                             "The business owner responds back with a message signaling interest.",
                             "You call, build rapport, and answer general questions.",
