@@ -1,0 +1,724 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ApplicationFields, ClientMockCallState, MediaEngagementInput, PublicConfig, QualificationStatus } from "@/lib/types";
+
+type Props = { config: PublicConfig };
+type CallState = ClientMockCallState & { error?: string; transcript?: Array<Record<string, unknown>> };
+type ResultState = { status: QualificationStatus; message: string; calendar: PublicConfig["calendar"] | null } | null;
+
+const emptyFields: Partial<ApplicationFields> = {
+  fullName: "",
+  preferredName: "",
+  email: "",
+  country: "",
+  desiredHourly: undefined,
+  earliestStartDate: "",
+  availableStart: "",
+  availableEnd: "",
+  vocarooUrl: "",
+  crmPlatforms: "",
+  appointmentSettingExperience: "",
+  industries: "",
+  pastMetrics: "",
+  salesProcessAcknowledged: false,
+  founderVideoAcknowledged: false,
+  recordingConsent: false,
+  accuracyConfirmation: false
+};
+
+const scenarioIntro =
+  "You have not received our exact script, and we do not expect you to know company-specific answers. These role plays are designed to evaluate common appointment-setting skills such as communication, confidence, listening, judgment, objection handling, and asking for the next step.";
+
+export function ApplicationFunnel({ config }: Props) {
+  const [applicantId, setApplicantId] = useState("");
+  const [currentStep, setCurrentStep] = useState(1);
+  const [highestStep, setHighestStep] = useState(1);
+  const [fields, setFields] = useState<Partial<ApplicationFields>>(emptyFields);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [duplicateMessage, setDuplicateMessage] = useState("");
+  const [saveState, setSaveState] = useState("Not saved yet.");
+  const [result, setResult] = useState<ResultState>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [micGranted, setMicGranted] = useState(false);
+  const [micStatus, setMicStatus] = useState("Test your microphone before starting.");
+  const [micLevel, setMicLevel] = useState(0);
+  const [founderVideo, setFounderVideo] = useState<MediaEngagementInput>({
+    mediaType: "founder_video",
+    mediaKey: "founder-video",
+    started: false,
+    secondsConsumed: 0,
+    percentageConsumed: 0,
+    completed: false,
+    replayCount: 0,
+    pauseCount: 0
+  });
+  const [callLibrary, setCallLibrary] = useState<MediaEngagementInput[]>(
+    config.content.callRecordings.map((call) => ({
+      mediaType: "call_recording",
+      mediaKey: call.key,
+      started: false,
+      secondsConsumed: 0,
+      percentageConsumed: 0,
+      completed: false,
+      replayCount: 0,
+      pauseCount: 0
+    }))
+  );
+  const [mockCalls, setMockCalls] = useState<CallState[]>([
+    { mockCallNumber: 1, status: "not_started" },
+    { mockCallNumber: 2, status: "not_started" },
+    { mockCallNumber: 3, status: "not_started" }
+  ]);
+  const [scenarios, setScenarios] = useState<Record<string, string>>({});
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeVapi = useRef<any>(null);
+  const activeCallNumber = useRef<1 | 2 | 3 | null>(null);
+  const callStartedAt = useRef<number>(0);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const progressPercent = currentStep * 20;
+  const tomorrow = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split("T")[0];
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("sbp_setter_next_state");
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.applicantId) setApplicantId(parsed.applicantId);
+      if (parsed.currentStep) setCurrentStep(parsed.currentStep);
+      if (parsed.highestStep) setHighestStep(parsed.highestStep);
+      if (parsed.fields) setFields({ ...emptyFields, ...parsed.fields });
+      if (parsed.founderVideo) setFounderVideo(parsed.founderVideo);
+      if (parsed.callLibrary) setCallLibrary(parsed.callLibrary);
+      if (parsed.mockCalls) setMockCalls(parsed.mockCalls);
+      if (parsed.scenarios) setScenarios(parsed.scenarios);
+      setSaveState("Restored from this device.");
+    } catch {
+      localStorage.removeItem("sbp_setter_next_state");
+    }
+  }, []);
+
+  useEffect(() => {
+    scheduleSave();
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [fields, currentStep, highestStep, founderVideo, callLibrary, mockCalls, scenarios]);
+
+  function updateField<K extends keyof ApplicationFields>(key: K, value: ApplicationFields[K]) {
+    setFields((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: "" }));
+  }
+
+  async function ensureSession(emailValue = fields.email) {
+    const email = String(emailValue || "").trim().toLowerCase();
+    if (!isValidEmail(email)) return null;
+    if (applicantId) return applicantId;
+    const response = await fetch("/api/applications/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    const payload = await response.json();
+    if (response.status === 409) {
+      setDuplicateMessage(payload.message);
+      setErrors((prev) => ({ ...prev, email: payload.message }));
+      return null;
+    }
+    if (!response.ok) return null;
+    setApplicantId(payload.applicantId);
+    track("valid_email_entered", { email });
+    return payload.applicantId;
+  }
+
+  async function checkDuplicate() {
+    const email = String(fields.email || "").trim().toLowerCase();
+    if (!isValidEmail(email)) return false;
+    const response = await fetch("/api/applications/check-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    const payload = await response.json();
+    setDuplicateMessage(payload.exists ? payload.message : "");
+    if (payload.exists) setErrors((prev) => ({ ...prev, email: payload.message }));
+    return Boolean(payload.exists);
+  }
+
+  function scheduleSave() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => autosave(), 350);
+  }
+
+  async function autosave() {
+    const state = {
+      applicantId,
+      currentStep,
+      highestStep,
+      fields,
+      founderVideo,
+      callLibrary,
+      mockCalls,
+      scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
+    };
+    localStorage.setItem("sbp_setter_next_state", JSON.stringify(state));
+    if (!applicantId) return;
+    await fetch("/api/applications/autosave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state)
+    }).catch(() => null);
+    setSaveState("Saved just now.");
+  }
+
+  async function track(eventType: string, metadata: Record<string, unknown> = {}) {
+    if (!applicantId && eventType !== "application_started") return;
+    await fetch("/api/applications/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicantId, eventType, step: currentStep, metadata })
+    }).catch(() => null);
+  }
+
+  async function goToStep(step: number) {
+    const ok = await validateStep(currentStep);
+    if (!ok) return;
+    setCurrentStep(step);
+    setHighestStep((prev) => Math.max(prev, step));
+    track("step_completed", { step: currentStep, nextStep: step });
+    track("step_opened", { step });
+    window.scrollTo({ top: document.getElementById("application")?.offsetTop || 0, behavior: "smooth" });
+  }
+
+  async function validateStep(step: number) {
+    const nextErrors: Record<string, string> = {};
+    if (step === 1) {
+      const required: Array<keyof ApplicationFields> = [
+        "fullName",
+        "preferredName",
+        "email",
+        "country",
+        "desiredHourly",
+        "earliestStartDate",
+        "availableStart",
+        "availableEnd",
+        "vocarooUrl",
+        "crmPlatforms",
+        "appointmentSettingExperience",
+        "industries",
+        "pastMetrics"
+      ];
+      required.forEach((field) => {
+        if (!String(fields[field] ?? "").trim()) nextErrors[field] = "Required.";
+      });
+      if (fields.email && !isValidEmail(String(fields.email))) nextErrors.email = "Enter a valid email address.";
+      if (fields.vocarooUrl && !/^https?:\/\/(www\.)?(voca\.ro|vocaroo\.com)\//i.test(String(fields.vocarooUrl))) {
+        nextErrors.vocarooUrl = "Use a valid Vocaroo or voca.ro URL.";
+      }
+      if (fields.earliestStartDate && fields.earliestStartDate < tomorrow) nextErrors.earliestStartDate = "Choose today or a future date.";
+      if (!Number.isFinite(Number(fields.desiredHourly)) || Number(fields.desiredHourly) <= 0) {
+        nextErrors.desiredHourly = "Desired pay must be a dollar amount.";
+      }
+      if (!validAvailability(String(fields.availableStart || ""), String(fields.availableEnd || ""))) {
+        nextErrors.availableEnd = "Choose a valid start and end time.";
+      }
+      const duplicate = await checkDuplicate();
+      if (duplicate) nextErrors.email = duplicateMessage || "This email has already been used.";
+      if (!applicantId) await ensureSession();
+    }
+    if (step === 2 && !fields.salesProcessAcknowledged) nextErrors.salesProcessAcknowledged = "Confirm where the setter fits.";
+    if (step === 3 && !fields.founderVideoAcknowledged) nextErrors.founderVideoAcknowledged = "This acknowledgment is required.";
+    if (step === 4 && mockCalls.some((call) => call.status !== "completed")) nextErrors.mockCalls = "Complete all three mock calls.";
+    if (step === 5) {
+      config.content.scenarioQuestions.forEach((question) => {
+        if (!String(scenarios[question.key] || "").trim()) nextErrors[question.key] = "Required.";
+      });
+      if (!fields.recordingConsent) nextErrors.recordingConsent = "Recording consent is required.";
+      if (!fields.accuracyConfirmation) nextErrors.accuracyConfirmation = "Accuracy confirmation is required.";
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  async function requestMicrophone() {
+    try {
+      setMicStatus("Requesting microphone permission...");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicGranted(true);
+      setMicStatus("Microphone permission granted.");
+      track("microphone_permission_granted");
+      const context = new AudioContext();
+      const analyser = context.createAnalyser();
+      const source = context.createMediaStreamSource(stream);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      source.connect(analyser);
+      const started = Date.now();
+      const loop = () => {
+        analyser.getByteFrequencyData(data);
+        setMicLevel(Math.min(100, (data.reduce((a, b) => a + b, 0) / data.length) * 2.5));
+        if (Date.now() - started < 3500) requestAnimationFrame(loop);
+        else {
+          stream.getTracks().forEach((track) => track.stop());
+          context.close();
+          setMicLevel(0);
+        }
+      };
+      loop();
+    } catch (error) {
+      setMicGranted(false);
+      setMicStatus("Microphone access was blocked. Allow access in your browser settings, then test again.");
+      track("microphone_permission_rejected", { message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  async function startMockCall(mockCallNumber: 1 | 2 | 3) {
+    if (!micGranted) {
+      await requestMicrophone();
+      if (!micGranted) return;
+    }
+    if (activeCallNumber.current) return;
+    const assistantId = config.vapi.assistantIds[String(mockCallNumber) as "1" | "2" | "3"];
+    if (!config.vapi.publicKey || !assistantId) {
+      updateMock(mockCallNumber, { status: "failed", error: "Vapi is not configured yet." });
+      return;
+    }
+    try {
+      const { default: Vapi } = await import("@vapi-ai/web");
+      activeCallNumber.current = mockCallNumber;
+      callStartedAt.current = Date.now();
+      updateMock(mockCallNumber, { status: "connecting", error: "" });
+      track("mock_call_started", { mockCallNumber });
+      const vapi = new Vapi(config.vapi.publicKey);
+      activeVapi.current = vapi;
+      vapi.on("call-start", () => {
+        updateMock(mockCallNumber, { status: "live", startedAt: new Date().toISOString() });
+        startTimer(mockCallNumber);
+      });
+      vapi.on("message", (message: any) => {
+        if (message?.type === "transcript") {
+          setMockCalls((prev) =>
+            prev.map((call) =>
+              call.mockCallNumber === mockCallNumber
+                ? { ...call, transcript: [...(call.transcript || []), message] }
+                : call
+            )
+          );
+        }
+      });
+      vapi.on("call-end", () => completeCall(mockCallNumber, "vapi_call_end"));
+      vapi.on("error", (error: Error) => failCall(mockCallNumber, error.message));
+      const call = await vapi.start(assistantId, {
+        variableValues: {
+          application_id: applicantId,
+          preferred_name: fields.preferredName || "",
+          mock_call_number: String(mockCallNumber)
+        },
+        metadata: {
+          application_id: applicantId,
+          mock_call_number: mockCallNumber,
+          source: "solidbooked-pro-setter-application"
+        }
+      });
+      if ((call as any)?.id) updateMock(mockCallNumber, { vapiCallId: (call as any).id });
+    } catch (error) {
+      failCall(mockCallNumber, error instanceof Error ? error.message : "The call could not start.");
+    }
+  }
+
+  async function endMockCall(mockCallNumber: 1 | 2 | 3) {
+    if (activeCallNumber.current !== mockCallNumber) return;
+    updateMock(mockCallNumber, { status: "ending" });
+    try {
+      await activeVapi.current?.stop();
+    } catch {
+      completeCall(mockCallNumber, "manual_end_fallback");
+    }
+  }
+
+  function startTimer(mockCallNumber: 1 | 2 | 3) {
+    if (timer.current) clearInterval(timer.current);
+    timer.current = setInterval(() => {
+      updateMock(mockCallNumber, { durationSeconds: Math.round((Date.now() - callStartedAt.current) / 1000) });
+    }, 500);
+  }
+
+  function completeCall(mockCallNumber: 1 | 2 | 3, endedReason: string) {
+    if (timer.current) clearInterval(timer.current);
+    activeCallNumber.current = null;
+    activeVapi.current = null;
+    updateMock(mockCallNumber, {
+      status: "completed",
+      endedAt: new Date().toISOString(),
+      endedReason,
+      durationSeconds: Math.round((Date.now() - callStartedAt.current) / 1000)
+    });
+    track("mock_call_completed", { mockCallNumber, endedReason });
+  }
+
+  function failCall(mockCallNumber: 1 | 2 | 3, error: string) {
+    if (timer.current) clearInterval(timer.current);
+    activeCallNumber.current = null;
+    activeVapi.current = null;
+    updateMock(mockCallNumber, { status: "failed", error });
+    track("mock_call_failed", { mockCallNumber, error });
+  }
+
+  function updateMock(mockCallNumber: 1 | 2 | 3, patch: Partial<CallState>) {
+    setMockCalls((prev) => prev.map((call) => (call.mockCallNumber === mockCallNumber ? { ...call, ...patch } : call)));
+  }
+
+  async function submit() {
+    const ok = await validateStep(5);
+    if (!ok || !applicantId) return;
+    setSubmitting(true);
+    const payload = {
+      applicantId,
+      currentStep,
+      highestStep,
+      fields,
+      founderVideo,
+      callLibrary,
+      mockCalls,
+      scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
+    };
+    const response = await fetch("/api/applications/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json();
+    setSubmitting(false);
+    if (!response.ok) {
+      setErrors({ submit: body.message || body.error || "Submission failed." });
+      return;
+    }
+    setResult({ status: body.status, message: body.message, calendar: body.calendar });
+    localStorage.removeItem("sbp_setter_next_state");
+    track("application_submitted", { status: body.status });
+  }
+
+  function renderError(key: string) {
+    return errors[key] ? <span className="error-text" role="alert">{errors[key]}</span> : <span className="error-text" />;
+  }
+
+  return (
+    <div>
+      <header className="topbar">
+        <div className="container topbar-inner">
+          <a className="brand" href="/">
+            <span className="brand-mark">✓</span>
+            <span>SolidBooked Pro</span>
+          </a>
+          <span className="topbar-meta">Appointment Setter Application</span>
+        </div>
+      </header>
+
+      <main>
+        <section className="hero">
+          <div className="container hero-grid">
+            <div>
+              <span className="eyebrow"><span className="dot" /> Remote opportunity</span>
+              <h1>Apply for the Appointment Setter role.</h1>
+              <p className="hero-copy">Help local business owners understand the website preview we prepared for them, answer general questions, send relevant information, and schedule a live presentation with our team.</p>
+              <div className="role-tags">
+                <span className="role-tag">Remote</span>
+                <span className="role-tag">Eastern Time hours</span>
+                <span className="role-tag">Paid training</span>
+                <span className="role-tag">Advancement path</span>
+              </div>
+            </div>
+            <aside className="start-card">
+              <h2>What to expect</h2>
+              <p>Complete the five steps below in one focused sitting.</p>
+              <ol className="start-list">
+                {["Application questions", "The sales process", "Founder video", "Calls and role play", "Scenario questions"].map((item, index) => (
+                  <li key={item}><span className="num">{index + 1}</span><span><strong>{item}</strong><br /><small>{index === 3 ? "Three browser-based mock calls" : "Saved as you progress"}</small></span></li>
+                ))}
+              </ol>
+              <div className="notice"><strong>Before you begin:</strong> Set aside about 15-20 minutes and use a device with a working microphone.</div>
+              <button className="btn btn-primary" onClick={() => document.getElementById("application")?.scrollIntoView({ behavior: "smooth" })}>Begin application</button>
+            </aside>
+          </div>
+        </section>
+
+        <section className="section" id="application">
+          <div className="container">
+            {!result && (
+              <div className="application-card">
+                <div className="progress-panel" aria-live="polite">
+                  <div className="progress-head"><span>Step {currentStep} of 5</span><span>{progressPercent}% complete · {saveState}</span></div>
+                  <div className="progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}><div className="progress-fill" style={{ width: `${progressPercent}%` }} /></div>
+                  <div className="step-tabs">
+                    {[1, 2, 3, 4, 5].map((step) => <button key={step} className={`step-tab ${step === currentStep ? "active" : ""}`} type="button" disabled={step > highestStep}> {step} <span>{["Info", "Process", "Video", "Calls", "Scenarios"][step - 1]}</span></button>)}
+                  </div>
+                </div>
+
+                <div className="form-shell">
+                  {currentStep === 1 && (
+                    <section className="form-step active">
+                      <div className="step-heading"><div><h2>Tell us about yourself.</h2><p>Required fields are checked before you can continue. Your email creates the application session and is checked for duplicates early.</p></div></div>
+                      <div className="grid">
+                        <Field id="fullName" label="Full name" value={fields.fullName} onChange={(v) => updateField("fullName", v)} error={renderError("fullName")} />
+                        <Field id="preferredName" label="Preferred name" value={fields.preferredName} onChange={(v) => updateField("preferredName", v)} error={renderError("preferredName")} />
+                        <Field id="email" label="Email address" type="email" value={fields.email} onBlur={() => ensureSession().then(checkDuplicate)} onChange={(v) => updateField("email", v)} error={renderError("email")} />
+                        <Field id="country" label="Country" value={fields.country} onChange={(v) => updateField("country", v)} error={renderError("country")} />
+                        <Field id="desiredHourly" label="Desired hourly pay in USD" type="number" value={fields.desiredHourly} onChange={(v) => updateField("desiredHourly", Number(v) as any)} error={renderError("desiredHourly")} />
+                        <Field id="earliestStartDate" label="Earliest start date" type="date" min={tomorrow} value={fields.earliestStartDate} onChange={(v) => updateField("earliestStartDate", v)} error={renderError("earliestStartDate")} />
+                        <div className={`field full ${errors.availableEnd ? "has-error" : ""}`}>
+                          <span className="legend-label">Exact availability in Eastern Time</span>
+                          <div className="availability-row">
+                            <select className="control" aria-label="Available start time" value={fields.availableStart || ""} onChange={(e) => updateField("availableStart", e.target.value)}>
+                              <TimeOptions />
+                            </select>
+                            <span>to</span>
+                            <select className="control" aria-label="Available end time" value={fields.availableEnd || ""} onChange={(e) => updateField("availableEnd", e.target.value)}>
+                              <TimeOptions />
+                            </select>
+                          </div>
+                          <span className="field-help">Enter the time window you can consistently work, already converted to U.S. Eastern Time.</span>
+                          {renderError("availableEnd")}
+                        </div>
+                        <Field id="vocarooUrl" label="Vocaroo recording URL" type="url" value={fields.vocarooUrl} onChange={(v) => updateField("vocarooUrl", v)} error={renderError("vocarooUrl")} full helper="Paste your voice-recording link." />
+                        <Textarea id="crmPlatforms" label="CRM or scheduling platforms used" value={fields.crmPlatforms} onChange={(v) => updateField("crmPlatforms", v)} error={renderError("crmPlatforms")} />
+                        <Textarea id="appointmentSettingExperience" label="Appointment-setting experience" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} />
+                        <Textarea id="industries" label="Industries or offers you have worked with" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} />
+                        <Textarea id="pastMetrics" label="What are some of your past appointment-setting metrics or measurable results?" value={fields.pastMetrics} onChange={(v) => updateField("pastMetrics", v)} error={renderError("pastMetrics")} helper="Include specific numbers when possible, such as calls made, conversations, appointments booked, show rate, close rate, or quota performance." />
+                      </div>
+                      {duplicateMessage && <p className="notice" role="alert">{duplicateMessage}</p>}
+                      <div className="actions"><span /><button className="btn btn-primary" onClick={() => goToStep(2)}>Continue</button></div>
+                    </section>
+                  )}
+
+                  {currentStep === 2 && (
+                    <section className="form-step active">
+                      <div className="step-heading"><div><h2>The sales process.</h2><p>Here is the lead roadmap and exactly where the setter fits into the process.</p></div></div>
+                      <div className="roadmap">
+                        <div className="setter-fit"><strong>Your part:</strong><p>The appointment setter calls the interested prospect, answers general questions, sends the relevant information, and schedules an appointment. The owner or closer presents the offer and collects payment.</p></div>
+                        <ol className="roadmap-list">
+                          {[
+                            "SolidBooked Pro sends an SMS to a business owner.",
+                            "The business owner receives a preview of their anticipated website.",
+                            "The business owner shows interest.",
+                            "The appointment setter calls the interested prospect.",
+                            "The setter answers general questions.",
+                            "The setter sends the relevant information.",
+                            "The setter schedules an appointment.",
+                            "The owner or closer presents the offer and collects payment."
+                          ].map((item, index) => <li key={item}><span className="num">{index + 1}</span><span>{item}</span></li>)}
+                        </ol>
+                      </div>
+                      <Checkbox id="salesProcessAcknowledged" checked={Boolean(fields.salesProcessAcknowledged)} onChange={(v) => updateField("salesProcessAcknowledged", v as any)} label="I understand where the appointment setter fits into the process." error={errors.salesProcessAcknowledged} />
+                      <StepActions back={() => setCurrentStep(1)} next={() => goToStep(3)} />
+                    </section>
+                  )}
+
+                  {currentStep === 3 && (
+                    <section className="form-step active">
+                      <div className="step-heading"><div><h2>Founder video.</h2><p>The video source is controlled by configuration. You do not need to watch 100%, but the acknowledgment below is required.</p></div><span className="pill">{founderVideo.percentageConsumed}% watched</span></div>
+                      <div className="video-frame">
+                        {config.content.founderVideoUrl ? (
+                          <video controls poster={config.content.founderVideoPosterUrl} onPlay={() => updateMedia(setFounderVideo, founderVideo, { started: true, replayCount: founderVideo.started ? founderVideo.replayCount + 1 : 0 })} onPause={() => updateMedia(setFounderVideo, founderVideo, { pauseCount: (founderVideo.pauseCount || 0) + 1 })} onEnded={() => updateMedia(setFounderVideo, founderVideo, { completed: true, percentageConsumed: 100 })} onTimeUpdate={(event) => {
+                            const video = event.currentTarget;
+                            updateMedia(setFounderVideo, founderVideo, { secondsConsumed: Math.round(video.currentTime), percentageConsumed: video.duration ? Math.max(founderVideo.percentageConsumed, Math.round((video.currentTime / video.duration) * 100)) : 0 });
+                          }} src={config.content.founderVideoUrl} />
+                        ) : (
+                          <div className="video-placeholder"><div><h3>Founder video placeholder</h3><p>Add the final video URL in environment configuration.</p></div></div>
+                        )}
+                      </div>
+                      <Checkbox id="founderVideoAcknowledged" checked={Boolean(fields.founderVideoAcknowledged)} onChange={(v) => updateField("founderVideoAcknowledged", v as any)} label="I understand the role, expectations, compensation structure, and interview process explained above." error={errors.founderVideoAcknowledged} />
+                      <StepActions back={() => setCurrentStep(2)} next={() => goToStep(4)} />
+                    </section>
+                  )}
+
+                  {currentStep === 4 && (
+                    <section className="form-step active">
+                      <div className="step-heading"><div><h2>Call library and mock calls.</h2><p>Listening to recordings is optional. Complete all three browser-based role plays before continuing.</p></div></div>
+                      <div className="media-grid">
+                        {config.content.callRecordings.map((call, index) => (
+                          <article className="audio-card" key={call.key}>
+                            <h3>{call.title}</h3>
+                            <p>{call.description}</p>
+                            <span className="media-meta">Duration: {call.durationLabel}</span>
+                            {call.url ? <audio controls src={call.url} onPlay={() => updateLibrary(index, { started: true, replayCount: callLibrary[index].started ? callLibrary[index].replayCount + 1 : 0 })} onTimeUpdate={(event) => {
+                              const audio = event.currentTarget;
+                              updateLibrary(index, { secondsConsumed: Math.round(audio.currentTime), percentageConsumed: audio.duration ? Math.max(callLibrary[index].percentageConsumed, Math.round((audio.currentTime / audio.duration) * 100)) : 0 });
+                            }} onEnded={() => updateLibrary(index, { completed: true, percentageConsumed: 100 })} /> : <div className="notice">Audio player slot ready. Add URL in configuration.</div>}
+                            <p className="media-meta">{callLibrary[index].percentageConsumed}% listened</p>
+                          </article>
+                        ))}
+                      </div>
+                      <div className="mock-intro"><strong>Before the mock calls</strong><p>{scenarioIntro}</p></div>
+                      <div className="mic-panel">
+                        <strong>Microphone test</strong>
+                        <p>{micStatus}</p>
+                        <div className="meter"><span style={{ width: `${micLevel}%` }} /></div>
+                        <button className="btn btn-secondary btn-small" type="button" onClick={requestMicrophone}>Test microphone</button>
+                      </div>
+                      <div className="mock-grid">
+                        {mockCalls.map((call, index) => {
+                          const locked = index > 0 && mockCalls[index - 1].status !== "completed";
+                          const live = call.status === "live" || call.status === "connecting" || call.status === "ending";
+                          return (
+                            <article className={`mock-card ${locked ? "locked" : ""} ${live ? "live" : ""}`} key={call.mockCallNumber}>
+                              <h3>Mock Call {call.mockCallNumber}</h3>
+                              <p>You have introduced yourself and explained why you are calling. Continue the conversation from here.</p>
+                              <p className="status-line">Status: {call.status.replaceAll("_", " ")}</p>
+                              <div className="timer">{formatDuration(call.durationSeconds || 0)}</div>
+                              {call.error && <p className="error-text" style={{ display: "block" }}>{call.error}</p>}
+                              <div className="actions">
+                                <button className="btn btn-secondary btn-small" disabled={locked || live || call.status === "completed"} onClick={() => startMockCall(call.mockCallNumber)}>Start call</button>
+                                <button className="btn btn-secondary btn-small" disabled={!live} onClick={() => endMockCall(call.mockCallNumber)}>End call</button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                      {errors.mockCalls && <p className="notice" role="alert">{errors.mockCalls}</p>}
+                      <StepActions back={() => setCurrentStep(3)} next={() => goToStep(5)} />
+                    </section>
+                  )}
+
+                  {currentStep === 5 && (
+                    <section className="form-step active">
+                      <div className="step-heading"><div><h2>Scenario questions.</h2><p>Answer in your own words. These questions can be changed from configuration.</p></div></div>
+                      <div className="grid">
+                        {config.content.scenarioQuestions.map((question) => (
+                          <Textarea key={question.key} id={question.key} label={question.prompt} value={scenarios[question.key] || ""} onChange={(value) => setScenarios((prev) => ({ ...prev, [question.key]: value }))} error={renderError(question.key)} />
+                        ))}
+                      </div>
+                      <Checkbox id="recordingConsent" checked={Boolean(fields.recordingConsent)} onChange={(v) => updateField("recordingConsent", v as any)} label="I consent to mock-call recording and review for hiring purposes." error={errors.recordingConsent} />
+                      <Checkbox id="accuracyConfirmation" checked={Boolean(fields.accuracyConfirmation)} onChange={(v) => updateField("accuracyConfirmation", v as any)} label="I confirm that the information and results I provided are accurate." error={errors.accuracyConfirmation} />
+                      {errors.submit && <p className="notice" role="alert">{errors.submit}</p>}
+                      <div className="actions"><button className="btn btn-secondary" onClick={() => setCurrentStep(4)}>Back</button><button className="btn btn-primary" disabled={submitting} onClick={submit}>{submitting ? "Submitting..." : "Submit application"}</button></div>
+                    </section>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <section className={`result-card ${result ? "show" : ""}`}>
+              {result?.status === "qualified" ? (
+                <>
+                  <h2>Congratulations — based on your application, you seem to be a strong potential fit for the role.</h2>
+                  {result.calendar?.embedUrl ? <iframe className="calendar-frame" title="Schedule your interview" src={result.calendar.embedUrl} onLoad={() => track("calendar_viewed")} /> : <div className="notice">Interview calendar is ready to connect. Add the provider embed URL in configuration.</div>}
+                  {result.calendar?.externalUrl && <a className="btn btn-primary" href={result.calendar.externalUrl} target="_blank" rel="noreferrer">Open interview calendar</a>}
+                </>
+              ) : (
+                <>
+                  <h2>Thank you for completing your application.</h2>
+                  <p>We will review your submission and contact you if we decide to move forward.</p>
+                </>
+              )}
+            </section>
+
+            <p className="privacy">Privacy and recording notice: application answers, engagement events, and mock-call artifacts may be stored and reviewed for hiring decisions. Private API keys and qualification rules are kept server-side.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+
+  function updateLibrary(index: number, patch: Partial<MediaEngagementInput>) {
+    setCallLibrary((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  }
+}
+
+function updateMedia(setter: (value: MediaEngagementInput) => void, current: MediaEngagementInput, patch: Partial<MediaEngagementInput>) {
+  setter({ ...current, ...patch });
+}
+
+function Field({ id, label, value, onChange, error, type = "text", full = false, helper, min, onBlur }: {
+  id: string;
+  label: string;
+  value: unknown;
+  onChange: (value: any) => void;
+  error: React.ReactNode;
+  type?: string;
+  full?: boolean;
+  helper?: string;
+  min?: string;
+  onBlur?: () => void;
+}) {
+  return (
+    <div className={`field ${full ? "full" : ""}`}>
+      <label htmlFor={id}>{label}</label>
+      <input className="control" id={id} name={id} type={type} min={min} value={String(value ?? "")} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} aria-describedby={`${id}-help ${id}-error`} />
+      {helper && <span className="field-help" id={`${id}-help`}>{helper}</span>}
+      <span id={`${id}-error`}>{error}</span>
+    </div>
+  );
+}
+
+function Textarea({ id, label, value, onChange, error, helper }: {
+  id: string;
+  label: string;
+  value: unknown;
+  onChange: (value: string) => void;
+  error: React.ReactNode;
+  helper?: string;
+}) {
+  return (
+    <div className="field full">
+      <label htmlFor={id}>{label}</label>
+      <textarea className="control" id={id} name={id} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} aria-describedby={`${id}-help ${id}-error`} />
+      {helper && <span className="field-help" id={`${id}-help`}>{helper}</span>}
+      <span id={`${id}-error`}>{error}</span>
+    </div>
+  );
+}
+
+function Checkbox({ id, checked, onChange, label, error }: {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  error?: string;
+}) {
+  return (
+    <div className="field full">
+      <div className="checkbox-card">
+        <input id={id} type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+        <label htmlFor={id}>{label}</label>
+      </div>
+      {error && <span className="error-text" style={{ display: "block" }}>{error}</span>}
+    </div>
+  );
+}
+
+function StepActions({ back, next }: { back: () => void; next: () => void }) {
+  return <div className="actions"><button className="btn btn-secondary" onClick={back}>Back</button><button className="btn btn-primary" onClick={next}>Continue</button></div>;
+}
+
+function TimeOptions() {
+  const options = [];
+  for (let minutes = 6 * 60; minutes <= 22 * 60; minutes += 30) {
+    const h24 = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const suffix = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 || 12;
+    const value = `${String(h24).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+    options.push(<option value={value} key={value}>{h12}:{String(mins).padStart(2, "0")} {suffix} ET</option>);
+  }
+  return <><option value="">Select time</option>{options}</>;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function validAvailability(start: string, end: string) {
+  if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return false;
+  return start < end;
+}
+
+function formatDuration(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
