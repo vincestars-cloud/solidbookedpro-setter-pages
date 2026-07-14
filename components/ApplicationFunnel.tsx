@@ -21,6 +21,8 @@ const emptyFields: Partial<ApplicationFields> = {
   appointmentSettingExperience: "",
   industries: "",
   pastMetrics: "",
+  resumeFileName: "",
+  resumeFileSize: 0,
   salesProcessAcknowledged: false,
   founderVideoAcknowledged: false,
   recordingConsent: false,
@@ -644,10 +646,14 @@ export function ApplicationFunnel({ config }: Props) {
                           {renderError("availableEnd")}
                         </div>
                         <Field id="vocarooUrl" label="Vocaroo recording URL" type="url" value={fields.vocarooUrl} onChange={(v) => updateField("vocarooUrl", v)} error={renderError("vocarooUrl")} helper="Paste your voice-recording link." />
-                        <Textarea id="crmPlatforms" label="CRM or scheduling platforms used" value={fields.crmPlatforms} onChange={(v) => updateField("crmPlatforms", v)} error={renderError("crmPlatforms")} full={false} compact />
-                        <Textarea id="appointmentSettingExperience" label="Appointment-setting experience" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} full={false} compact />
-                        <Textarea id="industries" label="Industries or offers you have worked with" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} full={false} compact />
-                        <Textarea id="pastMetrics" label="What are some of your past appointment-setting metrics or measurable results?" value={fields.pastMetrics} onChange={(v) => updateField("pastMetrics", v)} error={renderError("pastMetrics")} helper="Include specific numbers when possible, such as calls made, conversations, appointments booked, show rate, close rate, or quota performance." />
+                        <ResumeUpload fileName={fields.resumeFileName || ""} fileSize={fields.resumeFileSize || 0} onChange={(file) => {
+                          updateField("resumeFileName", (file?.name || "") as any);
+                          updateField("resumeFileSize", (file?.size || 0) as any);
+                        }} />
+                        <Textarea id="crmPlatforms" label="What CRM or scheduling platforms have you used?" value={fields.crmPlatforms} onChange={(v) => updateField("crmPlatforms", v)} error={renderError("crmPlatforms")} full={false} compact />
+                        <Textarea id="appointmentSettingExperience" label="What is your appointment setting or cold calling experience have you had?" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} full={false} compact />
+                        <Textarea id="industries" label="What industries or offers have you worked with?" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} full={false} compact />
+                        <Textarea id="pastMetrics" label="What are some of the past metrics that you had?" value={fields.pastMetrics} onChange={(v) => updateField("pastMetrics", v)} error={renderError("pastMetrics")} helper="Include specific numbers when possible, such as calls made, conversations, appointments booked, show rate, close rate, or quota performance." />
                       </div>
                       {duplicateMessage && <p className="notice" role="alert">{duplicateMessage}</p>}
                       <div className="actions"><span /><button className="btn btn-primary" onClick={() => goToStep(2)}>Continue</button></div>
@@ -660,12 +666,11 @@ export function ApplicationFunnel({ config }: Props) {
                       <div className="roadmap">
                         <ol className="roadmap-list">
                           {[
-                            "SolidBooked Pro sends an SMS to a business owner.",
-                            "The owner receives a message from us.",
+                            "We find a businesses that need our services.",
+                            "We create the solution and send it to the business.",
                             "The business owner responds back with a message signaling interest.",
                             "You call, build rapport, and answer general questions.",
-                            "You send details by updating that business in the CRM.",
-                            "The CRM sends the business owner details about our company and process.",
+                            "You update their details in the CRM and it will send information about us automatically.",
                             "You book a time that they will be able to review the site with us and make any changes they need.",
                             "The owner or closer presents the offer and collects payment."
                           ].map((item, index) => {
@@ -673,7 +678,7 @@ export function ApplicationFunnel({ config }: Props) {
                             return (
                               <li className={setterStep ? "setter-step" : ""} key={item}>
                                 <span className="num">{index + 1}</span>
-                                <span>{setterStep && <em className="setter-badge">Setter action</em>}{item}</span>
+                                <span>{setterStep && <em className="setter-badge">Your role</em>}{item}</span>
                               </li>
                             );
                           })}
@@ -695,13 +700,36 @@ export function ApplicationFunnel({ config }: Props) {
                         <div className="career-path-card">
                           <div className="career-path-heading">
                             <span>Career progression path</span>
-                            <strong>From setter to closer</strong>
+                            <strong>From Website Setter to Marketing Client Closer</strong>
+                            <p>We want you to be able to move from our low ticket Website Setter to our high ticket Marketing Client Closer.</p>
                           </div>
                           <div className="comp-path" aria-label="Career progression path">
-                            {["Website Setter (Hourly + $20 Qualified Appointment Booked)", "Annuity Setter (Hourly + $100 Qualified Appointment Booked)", "Annuity Closer (Hourly + $250 per Sale)"].map((item, index) => (
-                              <div className="comp-step" key={item}>
+                            {[
+                              {
+                                role: "Website Appt Setter",
+                                note: "Where you start",
+                                pay: "Hourly + $20 per Qualified Appointment",
+                                earning: "Minimum Earning: $2,100 USD per month"
+                              },
+                              {
+                                role: "Lead Service Setter",
+                                note: "",
+                                pay: "Hourly + $100 per Qualified Appointment",
+                                earning: "Minimum Earning: $6,600 USD per month"
+                              },
+                              {
+                                role: "Lead Service Closer",
+                                note: "",
+                                pay: "Hourly + $250 per Sale",
+                                earning: "Minimum Earning: $12,800 USD per month"
+                              }
+                            ].map((item, index) => (
+                              <div className="comp-step" key={item.role}>
                                 <span>{index + 1}</span>
-                                <strong>{item}</strong>
+                                <strong className="comp-role">{item.role}</strong>
+                                {item.note && <em className="comp-note">{item.note}</em>}
+                                <p className="comp-pay">{item.pay}</p>
+                                <p className="comp-earning">{item.earning}</p>
                               </div>
                             ))}
                           </div>
@@ -738,12 +766,14 @@ export function ApplicationFunnel({ config }: Props) {
                           <article className="audio-card" key={call.key}>
                             <h3>{call.title}</h3>
                             <p>{call.description}</p>
-                            <span className="media-meta">Duration: {call.durationLabel}</span>
-                            {call.url ? <audio controls src={call.url} onPlay={() => updateLibrary(index, { started: true, replayCount: callLibrary[index].started ? callLibrary[index].replayCount + 1 : 0 })} onTimeUpdate={(event) => {
+                            <span className="media-meta">Call Duration: {call.durationLabel}</span>
+                            {call.embedUrl ? (
+                              <iframe className="audio-embed" title={call.title} src={call.embedUrl} allow="autoplay" onLoad={() => updateLibrary(index, { started: true })} />
+                            ) : call.url ? <audio controls src={call.url} onPlay={() => updateLibrary(index, { started: true, replayCount: callLibrary[index].started ? callLibrary[index].replayCount + 1 : 0 })} onTimeUpdate={(event) => {
                               const audio = event.currentTarget;
                               updateLibrary(index, { secondsConsumed: Math.round(audio.currentTime), percentageConsumed: audio.duration ? Math.max(callLibrary[index].percentageConsumed, Math.round((audio.currentTime / audio.duration) * 100)) : 0 });
                             }} onEnded={() => updateLibrary(index, { completed: true, percentageConsumed: 100 })} /> : <div className="notice">Audio player slot ready. Add URL in configuration.</div>}
-                            <p className="media-meta">{callLibrary[index].percentageConsumed}% listened</p>
+                            {!call.embedUrl && <p className="media-meta">{callLibrary[index].percentageConsumed}% listened</p>}
                           </article>
                         ))}
                       </div>
@@ -869,6 +899,33 @@ function Textarea({ id, label, value, onChange, error, helper, full = true, comp
   );
 }
 
+function ResumeUpload({ fileName, fileSize, onChange }: {
+  fileName: string;
+  fileSize: number;
+  onChange: (file: File | null) => void;
+}) {
+  return (
+    <div className="field compact-field resume-field">
+      <label htmlFor="resumeUpload">Resume</label>
+      <label className="resume-upload" htmlFor="resumeUpload">
+        <span>{fileName ? "Replace resume" : "Upload resume"}</span>
+        <input
+          id="resumeUpload"
+          name="resumeUpload"
+          type="file"
+          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={(event) => onChange(event.target.files?.[0] || null)}
+        />
+      </label>
+      {fileName ? (
+        <span className="resume-file">{fileName} {fileSize ? `(${formatFileSize(fileSize)})` : ""}</span>
+      ) : (
+        <span className="field-help">PDF, DOC, or DOCX preferred.</span>
+      )}
+    </div>
+  );
+}
+
 function Checkbox({ id, checked, onChange, label, error }: {
   id: string;
   checked: boolean;
@@ -917,4 +974,16 @@ function formatDuration(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = Math.floor(totalSeconds % 60);
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatFileSize(bytes: number) {
+  if (!bytes) return "0 KB";
+  const units = ["bytes", "KB", "MB"];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }

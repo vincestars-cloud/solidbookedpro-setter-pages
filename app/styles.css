@@ -124,6 +124,11 @@ label, .legend-label { font-weight: 800; color: #263244; }
 .control:hover { border-color: #aebbd0; }
 textarea.control { min-height: 130px; resize: vertical; }
 .compact-textarea textarea.control { min-height: 98px; }
+.resume-field { align-self: stretch; }
+.resume-upload { min-height: 48px; display: flex; align-items: center; justify-content: center; padding: 11px 12px; border: 1px dashed #aebbd0; border-radius: 10px; background: #f8fafc; color: var(--primary-dark); font-weight: 900; cursor: pointer; }
+.resume-upload:hover { border-color: var(--primary); background: #edf2ff; }
+.resume-upload input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+.resume-file { color: #263244; font-size: 13px; font-weight: 750; overflow-wrap: anywhere; }
 .field-help { color: var(--muted); font-size: 13px; }
 .error-text { display: none; color: var(--danger); font-size: 13px; font-weight: 750; }
 .inline-error { display: block; }
@@ -152,14 +157,18 @@ textarea.control { min-height: 130px; resize: vertical; }
 .metrics-grid strong { display: block; margin-bottom: 6px; font-size: 18px; line-height: 1.2; }
 .metrics-grid p { margin-bottom: 0; color: var(--muted); }
 .career-path-card { padding: 16px; border: 1px solid #cbd8ff; border-radius: 14px; background: linear-gradient(180deg, #ffffff 0%, #f4f7ff 100%); }
-.career-path-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.career-path-heading { display: grid; gap: 6px; margin-bottom: 14px; }
 .career-path-heading span { color: var(--primary-dark); font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .career-path-heading strong { font-size: 18px; letter-spacing: -.02em; }
+.career-path-heading p { max-width: 780px; margin-bottom: 0; color: var(--muted); }
 .comp-path { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.comp-step { position: relative; min-height: 96px; display: grid; align-content: start; gap: 8px; padding: 16px; border: 1px solid #cbd8ff; border-radius: 12px; background: #f3f6ff; }
+.comp-step { position: relative; min-height: 178px; display: grid; align-content: start; gap: 8px; padding: 16px; border: 1px solid #cbd8ff; border-radius: 12px; background: #f3f6ff; }
 .comp-step:not(:last-child)::after { content: ">"; position: absolute; right: -12px; top: 50%; transform: translateY(-50%); color: var(--primary-dark); font-weight: 900; }
-.comp-step span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: #fff; background: var(--primary); font-size: 13px; font-weight: 900; }
-.comp-step strong { font-size: 14px; line-height: 1.3; }
+.comp-step > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: #fff; background: var(--primary); font-size: 13px; font-weight: 900; }
+.comp-role { display: block; color: #111827; font-size: 18px; font-weight: 950; line-height: 1.15; letter-spacing: -.02em; }
+.comp-note { width: fit-content; padding: 3px 8px; border-radius: 999px; color: var(--primary-dark); background: #dfe8ff; font-size: 11px; font-style: normal; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
+.comp-pay, .comp-earning { margin-bottom: 0; color: #334155; font-size: 14px; line-height: 1.35; }
+.comp-earning { color: #145638; font-weight: 900; }
 .video-frame { border: 1px solid var(--line); border-radius: 14px; background: #101827; overflow: hidden; }
 .video-placeholder { min-height: min(68svh, 620px); display: grid; place-items: center; text-align: center; color: #dbe7ff; padding: 28px; background: linear-gradient(135deg, #101827, #24345d); }
 .video-frame video { display: block; width: 100%; max-height: 68svh; aspect-ratio: 9 / 16; background: #111827; object-fit: contain; }
@@ -169,6 +178,7 @@ textarea.control { min-height: 130px; resize: vertical; }
 .audio-card h3, .mock-card h3 { margin-bottom: 4px; font-size: 18px; }
 .audio-card p { color: var(--muted); }
 .audio-card audio { width: 100%; margin-top: 12px; }
+.audio-embed { width: 100%; height: 132px; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; }
 .media-meta, .status-line { color: var(--muted); font-size: 13px; }
 .mock-intro { padding: 18px; border-radius: 12px; border: 1px solid #f2d7a3; color: #5b3a00; background: var(--warning-soft); }
 .mic-panel { display: grid; gap: 12px; margin: 18px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }

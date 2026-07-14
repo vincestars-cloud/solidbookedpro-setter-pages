@@ -64,6 +64,8 @@ export type ApplicationFields = {
   appointmentSettingExperience: string;
   industries: string;
   pastMetrics: string;
+  resumeFileName: string;
+  resumeFileSize: number;
   salesProcessAcknowledged: boolean;
   founderVideoAcknowledged: boolean;
   recordingConsent: boolean;
@@ -121,7 +123,7 @@ export type PublicConfig = {
     founderVideoUrl: string;
     founderVideoPosterUrl: string;
     founderVideoMinimumWatchPercent: number;
-    callRecordings: Array<{ key: string; title: string; description: string; url: string; durationLabel: string }>;
+    callRecordings: Array<{ key: string; title: string; description: string; url: string; embedUrl?: string; durationLabel: string }>;
     scenarioQuestions: Array<{ key: string; prompt: string }>;
   };
   vapi: {

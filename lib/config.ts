@@ -26,24 +26,27 @@ export const publicConfig: PublicConfig = {
     callRecordings: [
       {
         key: "successful-call-1",
-        title: process.env.NEXT_PUBLIC_CALL_1_TITLE || "Successful appointment-setting call 1",
-        description: process.env.NEXT_PUBLIC_CALL_1_DESCRIPTION || "Appointment booked after general questions.",
-        url: process.env.NEXT_PUBLIC_CALL_1_URL || "",
-        durationLabel: process.env.NEXT_PUBLIC_CALL_1_DURATION || "Add duration"
+        title: process.env.NEXT_PUBLIC_CALL_1_TITLE || "Call 1 - No Resistance from the Prospect",
+        description: process.env.NEXT_PUBLIC_CALL_1_DESCRIPTION || "A real successful appointment-setting call with low resistance.",
+        url: process.env.NEXT_PUBLIC_CALL_1_URL || "https://drive.google.com/uc?export=download&id=1gHtotsTogn-z_bCcUWl67AD58x_cjFrk",
+        embedUrl: process.env.NEXT_PUBLIC_CALL_1_EMBED_URL || "https://drive.google.com/file/d/1gHtotsTogn-z_bCcUWl67AD58x_cjFrk/preview",
+        durationLabel: process.env.NEXT_PUBLIC_CALL_1_DURATION || "1:52"
       },
       {
         key: "successful-call-2",
-        title: process.env.NEXT_PUBLIC_CALL_2_TITLE || "Successful appointment-setting call 2",
-        description: process.env.NEXT_PUBLIC_CALL_2_DESCRIPTION || "Interest clarified and next step secured.",
-        url: process.env.NEXT_PUBLIC_CALL_2_URL || "",
-        durationLabel: process.env.NEXT_PUBLIC_CALL_2_DURATION || "Add duration"
+        title: process.env.NEXT_PUBLIC_CALL_2_TITLE || "Call 2 - Resistance from the Prospect",
+        description: process.env.NEXT_PUBLIC_CALL_2_DESCRIPTION || "A real appointment-setting call with prospect resistance.",
+        url: process.env.NEXT_PUBLIC_CALL_2_URL || "https://drive.google.com/uc?export=download&id=1LaCDNO_JSJP5tJlpLyT8KT6JUdj_UQcZ",
+        embedUrl: process.env.NEXT_PUBLIC_CALL_2_EMBED_URL || "https://drive.google.com/file/d/1LaCDNO_JSJP5tJlpLyT8KT6JUdj_UQcZ/preview",
+        durationLabel: process.env.NEXT_PUBLIC_CALL_2_DURATION || "2:28"
       },
       {
         key: "successful-call-3",
-        title: process.env.NEXT_PUBLIC_CALL_3_TITLE || "Successful appointment-setting call 3",
-        description: process.env.NEXT_PUBLIC_CALL_3_DESCRIPTION || "Follow-up converted into an appointment.",
-        url: process.env.NEXT_PUBLIC_CALL_3_URL || "",
-        durationLabel: process.env.NEXT_PUBLIC_CALL_3_DURATION || "Add duration"
+        title: process.env.NEXT_PUBLIC_CALL_3_TITLE || "Call 3 - Resistance from the Prospect (used to Referrals)",
+        description: process.env.NEXT_PUBLIC_CALL_3_DESCRIPTION || "A real appointment-setting call with resistance from a prospect used to referrals.",
+        url: process.env.NEXT_PUBLIC_CALL_3_URL || "https://drive.google.com/uc?export=download&id=1cG-sU93d8m4HHCKIcC4OvkE40vq1FMD1",
+        embedUrl: process.env.NEXT_PUBLIC_CALL_3_EMBED_URL || "https://drive.google.com/file/d/1cG-sU93d8m4HHCKIcC4OvkE40vq1FMD1/preview",
+        durationLabel: process.env.NEXT_PUBLIC_CALL_3_DURATION || "4:43"
       }
     ],
     scenarioQuestions: [

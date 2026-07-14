@@ -21,6 +21,8 @@ export const applicationFieldsSchema = z.object({
   appointmentSettingExperience: z.string().trim().min(1, "Appointment-setting experience is required.").max(4000),
   industries: z.string().trim().min(1, "Enter industries or offers you have worked with.").max(1600),
   pastMetrics: z.string().trim().min(1, "Past metrics or measurable results are required.").max(2500),
+  resumeFileName: z.string().trim().max(240).optional().default(""),
+  resumeFileSize: z.coerce.number().nonnegative().max(10_000_000).optional().default(0),
   salesProcessAcknowledged: z.boolean().optional().default(false),
   founderVideoAcknowledged: z.boolean().optional().default(false),
   recordingConsent: z.boolean().optional().default(false),
