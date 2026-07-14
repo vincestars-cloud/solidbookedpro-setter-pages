@@ -20,7 +20,7 @@ export const publicConfig: PublicConfig = {
     minimumOverlapHours: numberFromEnv("ROLE_MINIMUM_OVERLAP_HOURS", 5)
   },
   content: {
-    founderVideoUrl: process.env.NEXT_PUBLIC_FOUNDER_VIDEO_URL || "",
+    founderVideoUrl: process.env.NEXT_PUBLIC_FOUNDER_VIDEO_URL || "/media/appt_setter_96843.mp4",
     founderVideoPosterUrl: process.env.NEXT_PUBLIC_FOUNDER_VIDEO_POSTER_URL || "",
     founderVideoMinimumWatchPercent: numberFromEnv("FOUNDER_VIDEO_MINIMUM_WATCH_PERCENT", 70),
     callRecordings: [

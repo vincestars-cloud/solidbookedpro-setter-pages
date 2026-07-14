@@ -33,6 +33,7 @@ const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 
 export function ApplicationFunnel({ config }: Props) {
   const [applicantId, setApplicantId] = useState("");
+  const [started, setStarted] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [highestStep, setHighestStep] = useState(1);
   const [fields, setFields] = useState<Partial<ApplicationFields>>(emptyFields);
@@ -92,13 +93,20 @@ export function ApplicationFunnel({ config }: Props) {
     try {
       const parsed = JSON.parse(saved);
       if (parsed.applicantId) setApplicantId(parsed.applicantId);
-      if (parsed.currentStep) setCurrentStep(parsed.currentStep);
+      if (parsed.currentStep) {
+        setCurrentStep(parsed.currentStep);
+        setStarted(true);
+      }
       if (parsed.highestStep) setHighestStep(parsed.highestStep);
       if (parsed.fields) setFields({ ...emptyFields, ...parsed.fields });
       if (parsed.founderVideo) setFounderVideo(parsed.founderVideo);
       if (parsed.callLibrary) setCallLibrary(parsed.callLibrary);
       if (parsed.mockCalls) setMockCalls(parsed.mockCalls);
-      if (parsed.scenarios) setScenarios(parsed.scenarios);
+      if (Array.isArray(parsed.scenarios)) {
+        setScenarios(Object.fromEntries(parsed.scenarios.map((item: { questionKey: string; response: string }) => [item.questionKey, item.response])));
+      } else if (parsed.scenarios) {
+        setScenarios(parsed.scenarios);
+      }
       setSaveState("Restored from this device.");
     } catch {
       localStorage.removeItem("sbp_setter_next_state");
@@ -110,7 +118,7 @@ export function ApplicationFunnel({ config }: Props) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [fields, currentStep, highestStep, founderVideo, callLibrary, mockCalls, scenarios]);
+  }, [fields, started, currentStep, highestStep, founderVideo, callLibrary, mockCalls, scenarios]);
 
   function updateField<K extends keyof ApplicationFields>(key: K, value: ApplicationFields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -178,6 +186,7 @@ export function ApplicationFunnel({ config }: Props) {
   async function autosave() {
     const state = {
       applicantId,
+      started,
       currentStep,
       highestStep,
       fields,
@@ -217,7 +226,14 @@ export function ApplicationFunnel({ config }: Props) {
     setHighestStep((prev) => Math.max(prev, step));
     track("step_completed", { step: currentStep, nextStep: step });
     track("step_opened", { step });
-    window.scrollTo({ top: document.getElementById("application")?.offsetTop || 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function beginApplication() {
+    setStarted(true);
+    setCurrentStep((step) => Math.max(1, step));
+    setHighestStep((step) => Math.max(1, step));
+    track("application_started");
   }
 
   async function validateStep(step: number) {
@@ -294,18 +310,18 @@ export function ApplicationFunnel({ config }: Props) {
         }
       };
       loop();
+      return true;
     } catch (error) {
       setMicGranted(false);
       setMicStatus("Microphone access was blocked. Allow access in your browser settings, then test again.");
       track("microphone_permission_rejected", { message: error instanceof Error ? error.message : String(error) });
+      return false;
     }
   }
 
   async function startMockCall(mockCallNumber: 1 | 2 | 3) {
-    if (!micGranted) {
-      await requestMicrophone();
-      if (!micGranted) return;
-    }
+    const granted = micGranted || await requestMicrophone();
+    if (!granted) return;
     if (activeCallNumber.current) return;
     const assistantId = config.vapi.assistantIds[String(mockCallNumber) as "1" | "2" | "3"];
     if (!config.vapi.publicKey || !assistantId) {
@@ -471,57 +487,100 @@ export function ApplicationFunnel({ config }: Props) {
       </header>
 
       <main>
-        <section className="hero">
-          <div className="container hero-grid">
-            <div>
-              <span className="eyebrow"><span className="dot" /> Remote opportunity</span>
-              <h1>Apply for the Appointment Setter role.</h1>
-              <p className="hero-copy">Help local business owners understand the website preview we prepared for them, answer general questions, send relevant information, and schedule a live presentation with our team.</p>
-              <div className="role-tags">
-                <span className="role-tag">Remote</span>
-                <span className="role-tag">Eastern Time hours</span>
-                <span className="role-tag">Paid training</span>
-                <span className="role-tag">Advancement path</span>
-              </div>
-            </div>
-            <aside className="start-card">
-              <h2>What to expect</h2>
-              <p>Complete the five steps below in one focused sitting.</p>
-              <ol className="start-list">
-                {["Application questions", "The sales process", "Founder video", "Calls and role play", "Scenario questions"].map((item, index) => (
-                  <li key={item}><span className="num">{index + 1}</span><span><strong>{item}</strong><br /><small>{index === 3 ? "Three browser-based mock calls" : "Saved as you progress"}</small></span></li>
-                ))}
-              </ol>
-              <div className="notice"><strong>Before you begin:</strong> Set aside about 15-20 minutes and use a device with a working microphone.</div>
-              <button className="btn btn-primary" onClick={() => document.getElementById("application")?.scrollIntoView({ behavior: "smooth" })}>Begin application</button>
-            </aside>
-          </div>
-        </section>
+        {!started && !result ? (
+          <section className="cover">
+            <div className="container cover-grid">
+              <div className="cover-main">
+                <span className="eyebrow"><span className="dot" /> Remote opportunity</span>
+                <h1>Apply for Appointment Setter role.</h1>
+                <div className="role-tags" aria-label="Role details">
+                  <span className="role-tag">Remote</span>
+                  <span className="role-tag">Eastern Time hours</span>
+                  <span className="role-tag">Paid training</span>
+                  <span className="role-tag">Advancement path</span>
+                </div>
 
-        <section className="section" id="application">
-          <div className="container">
-            {!result && (
+                <div className="cover-panel lead-panel">
+                  <p className="kicker">What we do</p>
+                  <h2>We help business owners get more customers and clients.</h2>
+                  <div className="path-grid">
+                    <article>
+                      <span>Low Ticket</span>
+                      <p>We build them a website and get them ranked online.</p>
+                    </article>
+                    <article>
+                      <span>High Ticket</span>
+                      <p>We send them qualified customers. Our main guarantee is if the customer does not show up, they do not pay for the lead.</p>
+                    </article>
+                  </div>
+                </div>
+
+                <div className="cover-columns">
+                  <article className="cover-panel">
+                    <p className="kicker">What you will do</p>
+                    <p>We have both warm and cold business owners that need to be contacted and scheduled on the calendar.</p>
+                    <ul className="clean-list">
+                      <li><strong>Warm prospect (40%):</strong> They received something from us and raised their hand that they are considering our service.</li>
+                      <li><strong>Cold prospect (60%):</strong> We identified they need our service, like a business with a website that is not working or a business that is not getting enough customers, but they have not opted in yet.</li>
+                    </ul>
+                  </article>
+                  <article className="cover-panel">
+                    <p className="kicker">Who succeeds here</p>
+                    <ul className="check-list">
+                      <li>Comfortable speaking with cold and warm prospects all day.</li>
+                      <li>Reliable, coachable and consistent with follow-up.</li>
+                      <li>Can build rapport and is ok going off script.</li>
+                      <li>Has previous experience in a similar role.</li>
+                    </ul>
+                  </article>
+                </div>
+
+                <div className="cover-panel not-fit">
+                  <p className="kicker">This is not for you if</p>
+                  <ul className="clean-list two-up">
+                    <li>You dislike phone conversations or avoid follow-up.</li>
+                    <li>You have no rapport or sales training.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <aside className="start-card cover-start">
+                <h2>What to expect</h2>
+                <ol className="start-list">
+                  {["Tell us about yourself", "The sales process", "Founder video", "Listen, then role play", "Final questions and schedule interview"].map((item, index) => (
+                    <li key={item}><span className="num">{index + 1}</span><span><strong>{item}</strong><br /><small>{index === 3 ? "Three browser-based mock calls" : "Autosaved as you progress"}</small></span></li>
+                  ))}
+                </ol>
+                <div className="notice"><strong>Before you begin:</strong> Set aside about 10 minutes and use a device with a working microphone.</div>
+                <button className="btn btn-primary btn-wide" onClick={beginApplication}>Begin application</button>
+              </aside>
+            </div>
+          </section>
+        ) : (
+          <section className="section application-stage" id="application">
+            <div className="container">
+              {!result && (
               <div className="application-card">
                 <div className="progress-panel" aria-live="polite">
                   <div className="progress-head"><span>Step {currentStep} of 5</span><span>{progressPercent}% complete · {saveState}</span></div>
                   <div className="progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}><div className="progress-fill" style={{ width: `${progressPercent}%` }} /></div>
                   <div className="step-tabs">
-                    {[1, 2, 3, 4, 5].map((step) => <button key={step} className={`step-tab ${step === currentStep ? "active" : ""}`} type="button" disabled={step > highestStep}> {step} <span>{["Info", "Process", "Video", "Calls", "Scenarios"][step - 1]}</span></button>)}
+                    {[1, 2, 3, 4, 5].map((step) => <button key={step} className={`step-tab ${step === currentStep ? "active" : ""}`} type="button" disabled={step > highestStep} onClick={() => step <= highestStep && setCurrentStep(step)}> {step} <span>{["Info", "Process", "Video", "Calls", "Final"][step - 1]}</span></button>)}
                   </div>
                 </div>
 
                 <div className="form-shell">
                   {currentStep === 1 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Tell us about yourself.</h2><p>Required fields are checked before you can continue. Your email creates the application session and is checked for duplicates early.</p></div></div>
-                      <div className="grid">
+                      <div className="step-heading"><div><h2>Tell us about yourself.</h2><p>Your answers save as you go. Your email creates the application session and is checked for duplicates early.</p></div></div>
+                      <div className="grid compact-form">
                         <Field id="fullName" label="Full name" value={fields.fullName} onChange={(v) => updateField("fullName", v)} error={renderError("fullName")} />
                         <Field id="preferredName" label="Preferred name" value={fields.preferredName} onChange={(v) => updateField("preferredName", v)} error={renderError("preferredName")} />
                         <Field id="email" label="Email address" type="email" value={fields.email} onBlur={() => ensureSession().then(checkDuplicate)} onChange={(v) => updateField("email", v)} error={renderError("email")} />
                         <Field id="country" label="Country" value={fields.country} onChange={(v) => updateField("country", v)} error={renderError("country")} />
-                        <Field id="desiredHourly" label="Desired hourly pay in USD" type="number" value={fields.desiredHourly} onChange={(v) => updateField("desiredHourly", Number(v) as any)} error={renderError("desiredHourly")} />
-                        <Field id="earliestStartDate" label="Earliest start date" type="date" min={tomorrow} value={fields.earliestStartDate} onChange={(v) => updateField("earliestStartDate", v)} error={renderError("earliestStartDate")} />
-                        <div className={`field full ${errors.availableEnd ? "has-error" : ""}`}>
+                        <Field id="desiredHourly" label="Desired hourly pay in USD" type="number" value={fields.desiredHourly} onChange={(v) => updateField("desiredHourly", Number(v) as any)} error={renderError("desiredHourly")} compact />
+                        <Field id="earliestStartDate" label="Earliest start date" type="date" min={tomorrow} value={fields.earliestStartDate} onChange={(v) => updateField("earliestStartDate", v)} error={renderError("earliestStartDate")} compact />
+                        <div className={`field availability-field ${errors.availableEnd ? "has-error" : ""}`}>
                           <span className="legend-label">Exact availability in Eastern Time</span>
                           <div className="availability-row">
                             <select className="control" aria-label="Available start time" value={fields.availableStart || ""} onChange={(e) => updateField("availableStart", e.target.value)}>
@@ -535,10 +594,10 @@ export function ApplicationFunnel({ config }: Props) {
                           <span className="field-help">Enter the time window you can consistently work, already converted to U.S. Eastern Time.</span>
                           {renderError("availableEnd")}
                         </div>
-                        <Field id="vocarooUrl" label="Vocaroo recording URL" type="url" value={fields.vocarooUrl} onChange={(v) => updateField("vocarooUrl", v)} error={renderError("vocarooUrl")} full helper="Paste your voice-recording link." />
-                        <Textarea id="crmPlatforms" label="CRM or scheduling platforms used" value={fields.crmPlatforms} onChange={(v) => updateField("crmPlatforms", v)} error={renderError("crmPlatforms")} />
-                        <Textarea id="appointmentSettingExperience" label="Appointment-setting experience" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} />
-                        <Textarea id="industries" label="Industries or offers you have worked with" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} />
+                        <Field id="vocarooUrl" label="Vocaroo recording URL" type="url" value={fields.vocarooUrl} onChange={(v) => updateField("vocarooUrl", v)} error={renderError("vocarooUrl")} helper="Paste your voice-recording link." />
+                        <Textarea id="crmPlatforms" label="CRM or scheduling platforms used" value={fields.crmPlatforms} onChange={(v) => updateField("crmPlatforms", v)} error={renderError("crmPlatforms")} full={false} compact />
+                        <Textarea id="appointmentSettingExperience" label="Appointment-setting experience" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} full={false} compact />
+                        <Textarea id="industries" label="Industries or offers you have worked with" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} full={false} compact />
                         <Textarea id="pastMetrics" label="What are some of your past appointment-setting metrics or measurable results?" value={fields.pastMetrics} onChange={(v) => updateField("pastMetrics", v)} error={renderError("pastMetrics")} helper="Include specific numbers when possible, such as calls made, conversations, appointments booked, show rate, close rate, or quota performance." />
                       </div>
                       {duplicateMessage && <p className="notice" role="alert">{duplicateMessage}</p>}
@@ -550,19 +609,41 @@ export function ApplicationFunnel({ config }: Props) {
                     <section className="form-step active">
                       <div className="step-heading"><div><h2>The sales process.</h2><p>Here is the lead roadmap and exactly where the setter fits into the process.</p></div></div>
                       <div className="roadmap">
-                        <div className="setter-fit"><strong>Your part:</strong><p>The appointment setter calls the interested prospect, answers general questions, sends the relevant information, and schedules an appointment. The owner or closer presents the offer and collects payment.</p></div>
+                        <div className="setter-fit"><strong>Your part:</strong><p>The business owner responds back with a message signaling interest. You call, build rapport, answer general questions, update the business in the CRM, and book a time that they will be able to review the site with us and make any changes they need.</p></div>
                         <ol className="roadmap-list">
                           {[
                             "SolidBooked Pro sends an SMS to a business owner.",
-                            "The business owner receives a preview of their anticipated website.",
-                            "The business owner shows interest.",
-                            "The appointment setter calls the interested prospect.",
-                            "The setter answers general questions.",
-                            "The setter sends the relevant information.",
-                            "The setter schedules an appointment.",
+                            "The owner receives a message from us.",
+                            "The business owner responds back with a message signaling interest.",
+                            "You call, build rapport, and answer general questions.",
+                            "You send details by updating that business in the CRM.",
+                            "The CRM sends the business owner details about our company and process.",
+                            "You book a time that they will be able to review the site with us and make any changes they need.",
                             "The owner or closer presents the offer and collects payment."
                           ].map((item, index) => <li key={item}><span className="num">{index + 1}</span><span>{item}</span></li>)}
                         </ol>
+                      </div>
+                      <div className="metrics-comp">
+                        <div className="metrics-grid">
+                          <article>
+                            <span>Metric</span>
+                            <strong># of Appointments Booked per Hour Worked</strong>
+                            <p>You should be able to book a minimum of 2 qualified appointments every hour you work.</p>
+                          </article>
+                          <article>
+                            <span>Metric</span>
+                            <strong>Appointment Show Rate %</strong>
+                            <p>You should maintain an appointment show rate of 65%.</p>
+                          </article>
+                        </div>
+                        <div className="comp-path" aria-label="Compensation advancement path">
+                          {["Website Setter (Hourly + $20 Qualified Appointment Booked)", "Annuity Setter (Hourly + $100 Qualified Appointment Booked)", "Annuity Closer (Hourly + $250 per Sale)"].map((item, index) => (
+                            <div className="comp-step" key={item}>
+                              <span>{index + 1}</span>
+                              <strong>{item}</strong>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                       <Checkbox id="salesProcessAcknowledged" checked={Boolean(fields.salesProcessAcknowledged)} onChange={(v) => updateField("salesProcessAcknowledged", v as any)} label="I understand where the appointment setter fits into the process." error={errors.salesProcessAcknowledged} />
                       <StepActions back={() => setCurrentStep(1)} next={() => goToStep(3)} />
@@ -571,7 +652,7 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 3 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Founder video.</h2><p>The video source is controlled by configuration. You do not need to watch 100%, but the acknowledgment below is required.</p></div><span className="pill">{founderVideo.percentageConsumed}% watched</span></div>
+                      <div className="step-heading"><div><h2>Founder video.</h2></div></div>
                       <div className="video-frame">
                         {config.content.founderVideoUrl ? (
                           <video controls poster={config.content.founderVideoPosterUrl} onPlay={() => updateMedia(setFounderVideo, founderVideo, { started: true, replayCount: founderVideo.started ? founderVideo.replayCount + 1 : 0 })} onPause={() => updateMedia(setFounderVideo, founderVideo, { pauseCount: (founderVideo.pauseCount || 0) + 1 })} onEnded={() => updateMedia(setFounderVideo, founderVideo, { completed: true, percentageConsumed: 100 })} onTimeUpdate={(event) => {
@@ -589,7 +670,7 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 4 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Call library and mock calls.</h2><p>Listening to recordings is optional. Complete all three browser-based role plays before continuing.</p></div></div>
+                      <div className="step-heading"><div><h2>Listen, then role play.</h2><p>Review the examples if you want, then complete the three browser-based role plays.</p></div></div>
                       <div className="media-grid">
                         {config.content.callRecordings.map((call, index) => (
                           <article className="audio-card" key={call.key}>
@@ -637,13 +718,13 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 5 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Scenario questions.</h2><p>Answer in your own words. These questions can be changed from configuration.</p></div></div>
+                      <div className="step-heading"><div><h2>Final questions and schedule interview.</h2><p>Answer in your own words.</p></div></div>
                       <div className="grid">
                         {config.content.scenarioQuestions.map((question) => (
                           <Textarea key={question.key} id={question.key} label={question.prompt} value={scenarios[question.key] || ""} onChange={(value) => setScenarios((prev) => ({ ...prev, [question.key]: value }))} error={renderError(question.key)} />
                         ))}
                       </div>
-                      <Checkbox id="recordingConsent" checked={Boolean(fields.recordingConsent)} onChange={(v) => updateField("recordingConsent", v as any)} label="I consent to mock-call recording and review for hiring purposes." error={errors.recordingConsent} />
+                      <Checkbox id="recordingConsent" checked={Boolean(fields.recordingConsent)} onChange={(v) => updateField("recordingConsent", v as any)} label="I agree to the privacy and recording notice." error={errors.recordingConsent} />
                       <Checkbox id="accuracyConfirmation" checked={Boolean(fields.accuracyConfirmation)} onChange={(v) => updateField("accuracyConfirmation", v as any)} label="I confirm that the information and results I provided are accurate." error={errors.accuracyConfirmation} />
                       {errors.submit && <p className="notice" role="alert">{errors.submit}</p>}
                       <div className="actions"><button className="btn btn-secondary" onClick={() => setCurrentStep(4)}>Back</button><button className="btn btn-primary" disabled={submitting} onClick={submit}>{submitting ? "Submitting..." : "Submit application"}</button></div>
@@ -668,10 +749,11 @@ export function ApplicationFunnel({ config }: Props) {
               )}
             </section>
 
-            <p className="privacy">Privacy and recording notice: application answers, engagement events, and mock-call artifacts may be stored and reviewed for hiring decisions. Private API keys and qualification rules are kept server-side.</p>
-            {staticPagesMode && <p className="privacy">GitHub Pages mode is active. Answers are saved on this device until the server-backed deployment is connected.</p>}
-          </div>
-        </section>
+              <p className="privacy">Privacy and recording notice: application answers, engagement events, and mock-call artifacts may be stored and reviewed for hiring decisions. Private API keys and qualification rules are kept server-side.</p>
+              {staticPagesMode && <p className="privacy">GitHub Pages mode is active. Answers are saved on this device until the server-backed deployment is connected.</p>}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
@@ -685,7 +767,7 @@ function updateMedia(setter: (value: MediaEngagementInput) => void, current: Med
   setter({ ...current, ...patch });
 }
 
-function Field({ id, label, value, onChange, error, type = "text", full = false, helper, min, onBlur }: {
+function Field({ id, label, value, onChange, error, type = "text", full = false, helper, min, onBlur, compact = false }: {
   id: string;
   label: string;
   value: unknown;
@@ -696,9 +778,10 @@ function Field({ id, label, value, onChange, error, type = "text", full = false,
   helper?: string;
   min?: string;
   onBlur?: () => void;
+  compact?: boolean;
 }) {
   return (
-    <div className={`field ${full ? "full" : ""}`}>
+    <div className={`field ${full ? "full" : ""} ${compact ? "compact-field" : ""}`}>
       <label htmlFor={id}>{label}</label>
       <input className="control" id={id} name={id} type={type} min={min} value={String(value ?? "")} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} aria-describedby={`${id}-help ${id}-error`} />
       {helper && <span className="field-help" id={`${id}-help`}>{helper}</span>}
@@ -707,16 +790,18 @@ function Field({ id, label, value, onChange, error, type = "text", full = false,
   );
 }
 
-function Textarea({ id, label, value, onChange, error, helper }: {
+function Textarea({ id, label, value, onChange, error, helper, full = true, compact = false }: {
   id: string;
   label: string;
   value: unknown;
   onChange: (value: string) => void;
   error: React.ReactNode;
   helper?: string;
+  full?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <div className="field full">
+    <div className={`field ${full ? "full" : ""} ${compact ? "compact-textarea" : ""}`}>
       <label htmlFor={id}>{label}</label>
       <textarea className="control" id={id} name={id} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} aria-describedby={`${id}-help ${id}-error`} />
       {helper && <span className="field-help" id={`${id}-help`}>{helper}</span>}
