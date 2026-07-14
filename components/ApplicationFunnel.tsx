@@ -75,6 +75,7 @@ export function ApplicationFunnel({ config }: Props) {
   const [scenarios, setScenarios] = useState<Record<string, string>>({});
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const validationSummaryRef = useRef<HTMLDivElement | null>(null);
   const activeVapi = useRef<any>(null);
   const activeCallNumber = useRef<1 | 2 | 3 | null>(null);
   const callStartedAt = useRef<number>(0);
@@ -221,7 +222,10 @@ export function ApplicationFunnel({ config }: Props) {
 
   async function goToStep(step: number) {
     const ok = await validateStep(currentStep);
-    if (!ok) return;
+    if (!ok) {
+      focusValidationSummary();
+      return;
+    }
     setCurrentStep(step);
     setHighestStep((prev) => Math.max(prev, step));
     track("step_completed", { step: currentStep, nextStep: step });
@@ -243,7 +247,6 @@ export function ApplicationFunnel({ config }: Props) {
         "fullName",
         "preferredName",
         "email",
-        "country",
         "desiredHourly",
         "earliestStartDate",
         "availableStart",
@@ -279,7 +282,6 @@ export function ApplicationFunnel({ config }: Props) {
       config.content.scenarioQuestions.forEach((question) => {
         if (!String(scenarios[question.key] || "").trim()) nextErrors[question.key] = "Required.";
       });
-      if (!fields.recordingConsent) nextErrors.recordingConsent = "Recording consent is required.";
       if (!fields.accuracyConfirmation) nextErrors.accuracyConfirmation = "Accuracy confirmation is required.";
     }
     setErrors(nextErrors);
@@ -423,7 +425,10 @@ export function ApplicationFunnel({ config }: Props) {
 
   async function submit() {
     const ok = await validateStep(5);
-    if (!ok || !applicantId) return;
+    if (!ok || !applicantId) {
+      focusValidationSummary();
+      return;
+    }
     setSubmitting(true);
     const payload = {
       applicantId,
@@ -471,7 +476,14 @@ export function ApplicationFunnel({ config }: Props) {
   }
 
   function renderError(key: string) {
-    return errors[key] ? <span className="error-text" role="alert">{errors[key]}</span> : <span className="error-text" />;
+    return errors[key] ? <span className="error-text inline-error" role="alert">{errors[key]}</span> : <span className="error-text" />;
+  }
+
+  function focusValidationSummary() {
+    window.setTimeout(() => {
+      validationSummaryRef.current?.focus();
+      validationSummaryRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
   }
 
   return (
@@ -503,7 +515,7 @@ export function ApplicationFunnel({ config }: Props) {
 
               <nav className="application-nav" aria-label="Application navigation">
                 <ol>
-                  {["Tell us about yourself", "The sales process", "Founder video", "Listen, then role play", "Final questions and schedule interview"].map((item, index) => (
+                  {["Tell us about yourself", "Understand our sales process", "Watch Founder Video", "Listen to call and role play", "Final questions and schedule interview"].map((item, index) => (
                     <li key={item}>
                       <span className="num">{index + 1}</span>
                       <span>{item}</span>
@@ -593,11 +605,21 @@ export function ApplicationFunnel({ config }: Props) {
                   <div className="progress-head"><span>Step {currentStep} of 5</span><span>{progressPercent}% complete · {saveState}</span></div>
                   <div className="progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}><div className="progress-fill" style={{ width: `${progressPercent}%` }} /></div>
                   <div className="step-tabs">
-                    {[1, 2, 3, 4, 5].map((step) => <button key={step} className={`step-tab ${step === currentStep ? "active" : ""}`} type="button" disabled={step > highestStep} onClick={() => step <= highestStep && setCurrentStep(step)}> {step} <span>{["Info", "Process", "Video", "Calls", "Final"][step - 1]}</span></button>)}
+                    {[1, 2, 3, 4, 5].map((step) => <button key={step} className={`step-tab ${step === currentStep ? "active" : ""}`} type="button" disabled={step > highestStep} onClick={() => step <= highestStep && setCurrentStep(step)}> {step} <span>{["Info", "Understand our sales process", "Watch Founder Video", "Listen to call and role play", "Final"][step - 1]}</span></button>)}
                   </div>
                 </div>
 
                 <div className="form-shell">
+                  {Object.values(errors).filter(Boolean).length > 0 && (
+                    <div className="validation-summary" ref={validationSummaryRef} tabIndex={-1} role="alert" aria-live="assertive">
+                      <strong>Please fix the highlighted items before continuing.</strong>
+                      <ul>
+                        {Object.entries(errors).filter(([, message]) => Boolean(message)).map(([key, message]) => (
+                          <li key={key}>{message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {currentStep === 1 && (
                     <section className="form-step active">
                       <div className="step-heading"><div><h2>Tell us about yourself.</h2><p>Your answers save as you go. Your email creates the application session and is checked for duplicates early.</p></div></div>
@@ -605,7 +627,6 @@ export function ApplicationFunnel({ config }: Props) {
                         <Field id="fullName" label="Full name" value={fields.fullName} onChange={(v) => updateField("fullName", v)} error={renderError("fullName")} />
                         <Field id="preferredName" label="Preferred name" value={fields.preferredName} onChange={(v) => updateField("preferredName", v)} error={renderError("preferredName")} />
                         <Field id="email" label="Email address" type="email" value={fields.email} onBlur={() => ensureSession().then(checkDuplicate)} onChange={(v) => updateField("email", v)} error={renderError("email")} />
-                        <Field id="country" label="Country" value={fields.country} onChange={(v) => updateField("country", v)} error={renderError("country")} />
                         <Field id="desiredHourly" label="Desired hourly pay in USD" type="number" value={fields.desiredHourly} onChange={(v) => updateField("desiredHourly", Number(v) as any)} error={renderError("desiredHourly")} compact />
                         <Field id="earliestStartDate" label="Earliest start date" type="date" min={tomorrow} value={fields.earliestStartDate} onChange={(v) => updateField("earliestStartDate", v)} error={renderError("earliestStartDate")} compact />
                         <div className={`field availability-field ${errors.availableEnd ? "has-error" : ""}`}>
@@ -635,9 +656,8 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 2 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>The sales process.</h2><p>Here is the lead roadmap and exactly where the setter fits into the process.</p></div></div>
+                      <div className="step-heading"><div><h2>Understand our sales process.</h2><p>Here is the lead roadmap and where the setter fits into the process.</p></div></div>
                       <div className="roadmap">
-                        <div className="setter-fit"><strong>Your part:</strong><p>The business owner responds back with a message signaling interest. You call, build rapport, answer general questions, update the business in the CRM, and book a time that they will be able to review the site with us and make any changes they need.</p></div>
                         <ol className="roadmap-list">
                           {[
                             "SolidBooked Pro sends an SMS to a business owner.",
@@ -648,7 +668,15 @@ export function ApplicationFunnel({ config }: Props) {
                             "The CRM sends the business owner details about our company and process.",
                             "You book a time that they will be able to review the site with us and make any changes they need.",
                             "The owner or closer presents the offer and collects payment."
-                          ].map((item, index) => <li key={item}><span className="num">{index + 1}</span><span>{item}</span></li>)}
+                          ].map((item, index) => {
+                            const setterStep = item.startsWith("You ");
+                            return (
+                              <li className={setterStep ? "setter-step" : ""} key={item}>
+                                <span className="num">{index + 1}</span>
+                                <span>{setterStep && <em className="setter-badge">Setter action</em>}{item}</span>
+                              </li>
+                            );
+                          })}
                         </ol>
                       </div>
                       <div className="metrics-comp">
@@ -664,13 +692,19 @@ export function ApplicationFunnel({ config }: Props) {
                             <p>You should maintain an appointment show rate of 65%.</p>
                           </article>
                         </div>
-                        <div className="comp-path" aria-label="Compensation advancement path">
-                          {["Website Setter (Hourly + $20 Qualified Appointment Booked)", "Annuity Setter (Hourly + $100 Qualified Appointment Booked)", "Annuity Closer (Hourly + $250 per Sale)"].map((item, index) => (
-                            <div className="comp-step" key={item}>
-                              <span>{index + 1}</span>
-                              <strong>{item}</strong>
-                            </div>
-                          ))}
+                        <div className="career-path-card">
+                          <div className="career-path-heading">
+                            <span>Career progression path</span>
+                            <strong>From setter to closer</strong>
+                          </div>
+                          <div className="comp-path" aria-label="Career progression path">
+                            {["Website Setter (Hourly + $20 Qualified Appointment Booked)", "Annuity Setter (Hourly + $100 Qualified Appointment Booked)", "Annuity Closer (Hourly + $250 per Sale)"].map((item, index) => (
+                              <div className="comp-step" key={item}>
+                                <span>{index + 1}</span>
+                                <strong>{item}</strong>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                       <Checkbox id="salesProcessAcknowledged" checked={Boolean(fields.salesProcessAcknowledged)} onChange={(v) => updateField("salesProcessAcknowledged", v as any)} label="I understand where the appointment setter fits into the process." error={errors.salesProcessAcknowledged} />
@@ -680,7 +714,7 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 3 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Founder video.</h2></div></div>
+                      <div className="step-heading"><div><h2>Watch Founder Video.</h2></div></div>
                       <div className="video-frame">
                         {config.content.founderVideoUrl ? (
                           <video controls poster={config.content.founderVideoPosterUrl} onPlay={() => updateMedia(setFounderVideo, founderVideo, { started: true, replayCount: founderVideo.started ? founderVideo.replayCount + 1 : 0 })} onPause={() => updateMedia(setFounderVideo, founderVideo, { pauseCount: (founderVideo.pauseCount || 0) + 1 })} onEnded={() => updateMedia(setFounderVideo, founderVideo, { completed: true, percentageConsumed: 100 })} onTimeUpdate={(event) => {
@@ -698,7 +732,7 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 4 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Listen, then role play.</h2><p>Review the examples if you want, then complete the three browser-based role plays.</p></div></div>
+                      <div className="step-heading"><div><h2>Listen to call and role play.</h2><p>Review the examples if you want, then complete the three browser-based role plays.</p></div></div>
                       <div className="media-grid">
                         {config.content.callRecordings.map((call, index) => (
                           <article className="audio-card" key={call.key}>
@@ -732,7 +766,7 @@ export function ApplicationFunnel({ config }: Props) {
                               <div className="timer">{formatDuration(call.durationSeconds || 0)}</div>
                               {call.error && <p className="error-text" style={{ display: "block" }}>{call.error}</p>}
                               <div className="actions">
-                                <button className="btn btn-secondary btn-small" disabled={locked || live || call.status === "completed"} onClick={() => startMockCall(call.mockCallNumber)}>Start call</button>
+                                <button className="btn btn-success btn-small" disabled={locked || live || call.status === "completed"} onClick={() => startMockCall(call.mockCallNumber)}>Start call</button>
                                 <button className="btn btn-secondary btn-small" disabled={!live} onClick={() => endMockCall(call.mockCallNumber)}>End call</button>
                               </div>
                             </article>
@@ -752,7 +786,6 @@ export function ApplicationFunnel({ config }: Props) {
                           <Textarea key={question.key} id={question.key} label={question.prompt} value={scenarios[question.key] || ""} onChange={(value) => setScenarios((prev) => ({ ...prev, [question.key]: value }))} error={renderError(question.key)} />
                         ))}
                       </div>
-                      <Checkbox id="recordingConsent" checked={Boolean(fields.recordingConsent)} onChange={(v) => updateField("recordingConsent", v as any)} label="I agree to the privacy and recording notice." error={errors.recordingConsent} />
                       <Checkbox id="accuracyConfirmation" checked={Boolean(fields.accuracyConfirmation)} onChange={(v) => updateField("accuracyConfirmation", v as any)} label="I confirm that the information and results I provided are accurate." error={errors.accuracyConfirmation} />
                       {errors.submit && <p className="notice" role="alert">{errors.submit}</p>}
                       <div className="actions"><button className="btn btn-secondary" onClick={() => setCurrentStep(4)}>Back</button><button className="btn btn-primary" disabled={submitting} onClick={submit}>{submitting ? "Submitting..." : "Submit application"}</button></div>
@@ -777,8 +810,6 @@ export function ApplicationFunnel({ config }: Props) {
               )}
             </section>
 
-              <p className="privacy">Privacy and recording notice: application answers, engagement events, and mock-call artifacts may be stored and reviewed for hiring decisions. Private API keys and qualification rules are kept server-side.</p>
-              {staticPagesMode && <p className="privacy">GitHub Pages mode is active. Answers are saved on this device until the server-backed deployment is connected.</p>}
             </div>
           </section>
         )}

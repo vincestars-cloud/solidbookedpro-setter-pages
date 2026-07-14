@@ -8,7 +8,7 @@ export const applicationFieldsSchema = z.object({
   fullName: z.string().trim().min(1, "Full name is required.").max(160),
   preferredName: z.string().trim().min(1, "Preferred name is required.").max(100),
   email: z.string().trim().email("Enter a valid email address.").transform(normalizeEmail),
-  country: z.string().trim().min(1, "Country is required.").max(100),
+  country: z.string().trim().max(100).optional().default(""),
   desiredHourly: z.coerce.number().positive("Desired pay must be a dollar amount.").max(250),
   earliestStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose your earliest start date."),
   availableStart: timeSchema,

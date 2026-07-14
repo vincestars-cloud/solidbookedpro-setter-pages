@@ -20,7 +20,7 @@ export function evaluateQualification(input: QualificationInput): {
   const { fields } = input;
 
   if (input.duplicateSubmission) hardFlags.push("duplicate_submission");
-  if (!fields.recordingConsent || !fields.accuracyConfirmation) hardFlags.push("required_acknowledgment_missing");
+  if (!fields.accuracyConfirmation) hardFlags.push("required_acknowledgment_missing");
   if (!fields.founderVideoAcknowledged) hardFlags.push("founder_video_acknowledgment_missing");
   if (!input.microphoneGranted) hardFlags.push("microphone_not_confirmed");
   if (input.mockCallsCompleted < 3) hardFlags.push("mock_calls_incomplete");
