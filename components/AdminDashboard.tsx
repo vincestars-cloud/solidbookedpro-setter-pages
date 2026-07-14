@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ApplicantRecord } from "@/lib/types";
 
+const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
+
 type Bundle = {
   applicant: ApplicantRecord;
   events: Array<Record<string, unknown>>;
@@ -43,13 +45,67 @@ export function AdminDashboard() {
 
   async function loadApplicants(authToken = token) {
     sessionStorage.setItem("sbp_admin_token", authToken);
-    const response = await fetch("/api/admin/applicants", { headers: { "x-admin-token": authToken } });
-    if (response.ok) setApplicants((await response.json()).applicants || []);
+    try {
+      const response = await fetch("/api/admin/applicants", { headers: { "x-admin-token": authToken } });
+      if (response.ok) setApplicants((await response.json()).applicants || []);
+    } catch {
+      if (!staticPagesMode) return;
+      const submissions = JSON.parse(localStorage.getItem("sbp_setter_static_submissions") || "[]") as Array<any>;
+      setApplicants(
+        submissions.map((submission) => ({
+          id: submission.applicantId,
+          full_name: submission.fields?.fullName || null,
+          preferred_name: submission.fields?.preferredName || null,
+          normalized_email: submission.fields?.email || "",
+          country: submission.fields?.country || null,
+          desired_hourly_pay: submission.fields?.desiredHourly || null,
+          earliest_start_date: submission.fields?.earliestStartDate || null,
+          availability_est: submission.fields?.availableStart ? { start: submission.fields.availableStart, end: submission.fields.availableEnd } : null,
+          vocaroo_url: submission.fields?.vocarooUrl || null,
+          crm_platforms: submission.fields?.crmPlatforms || null,
+          appointment_setting_experience: submission.fields?.appointmentSettingExperience || null,
+          industries: submission.fields?.industries || null,
+          past_metrics: submission.fields?.pastMetrics || null,
+          application_status: "application_completed",
+          qualification_status: "manual_review",
+          internal_score: null,
+          current_step: submission.currentStep || 5,
+          started_at: submission.submittedAt || new Date().toISOString(),
+          submitted_at: submission.submittedAt || null,
+          total_completion_seconds: null,
+          interview_status: "not_scheduled",
+          interview_scheduled_at: null,
+          interview_details: null,
+          hiring_stage_status: null,
+          abandoned_at_step: null,
+          hard_flags: null,
+          reopened_at: null,
+          created_at: submission.submittedAt || new Date().toISOString(),
+          updated_at: submission.submittedAt || new Date().toISOString()
+        }))
+      );
+    }
   }
 
   async function openApplicant(id: string) {
-    const response = await fetch(`/api/admin/applicants/${id}`, { headers: { "x-admin-token": token } });
-    if (response.ok) setSelected(await response.json());
+    try {
+      const response = await fetch(`/api/admin/applicants/${id}`, { headers: { "x-admin-token": token } });
+      if (response.ok) setSelected(await response.json());
+    } catch {
+      if (!staticPagesMode) return;
+      const applicant = applicants.find((item) => item.id === id);
+      if (!applicant) return;
+      const submissions = JSON.parse(localStorage.getItem("sbp_setter_static_submissions") || "[]") as Array<any>;
+      const raw = submissions.find((item) => item.applicantId === id);
+      setSelected({
+        applicant,
+        events: [],
+        media: [raw?.founderVideo, ...(raw?.callLibrary || [])].filter(Boolean),
+        mockCalls: raw?.mockCalls || [],
+        scenarios: raw?.scenarios || [],
+        notes: []
+      });
+    }
   }
 
   async function updateStatus(patch: Record<string, unknown>) {
@@ -81,6 +137,7 @@ export function AdminDashboard() {
       <div className="container">
         <a className="brand" href="/"><span className="brand-mark">✓</span><span>SolidBooked Pro Admin</span></a>
         <p>Protected applicant review dashboard. Browser access is also guarded by basic auth in middleware.</p>
+        {staticPagesMode && <p className="notice">GitHub Pages mode is active. This dashboard can only read submissions saved in this browser. The protected database dashboard requires the server deployment.</p>}
         <div className="admin-toolbar">
           <input className="control" placeholder="Admin API token" value={token} onChange={(event) => setToken(event.target.value)} />
           <button className="btn btn-primary" onClick={() => loadApplicants()}>Load applicants</button>

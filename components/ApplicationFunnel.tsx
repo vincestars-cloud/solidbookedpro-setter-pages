@@ -29,6 +29,7 @@ const emptyFields: Partial<ApplicationFields> = {
 
 const scenarioIntro =
   "You have not received our exact script, and we do not expect you to know company-specific answers. These role plays are designed to evaluate common appointment-setting skills such as communication, confidence, listening, judgment, objection handling, and asking for the next step.";
+const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 
 export function ApplicationFunnel({ config }: Props) {
   const [applicantId, setApplicantId] = useState("");
@@ -120,35 +121,53 @@ export function ApplicationFunnel({ config }: Props) {
     const email = String(emailValue || "").trim().toLowerCase();
     if (!isValidEmail(email)) return null;
     if (applicantId) return applicantId;
-    const response = await fetch("/api/applications/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
-    });
-    const payload = await response.json();
-    if (response.status === 409) {
-      setDuplicateMessage(payload.message);
-      setErrors((prev) => ({ ...prev, email: payload.message }));
-      return null;
+    try {
+      const response = await fetch("/api/applications/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const payload = await response.json();
+      if (response.status === 409) {
+        setDuplicateMessage(payload.message);
+        setErrors((prev) => ({ ...prev, email: payload.message }));
+        return null;
+      }
+      if (!response.ok) throw new Error("Session API unavailable.");
+      setApplicantId(payload.applicantId);
+      track("valid_email_entered", { email });
+      return payload.applicantId;
+    } catch {
+      if (!staticPagesMode) return null;
+      const localId = crypto.randomUUID ? crypto.randomUUID() : `local_${Date.now()}`;
+      setApplicantId(localId);
+      return localId;
     }
-    if (!response.ok) return null;
-    setApplicantId(payload.applicantId);
-    track("valid_email_entered", { email });
-    return payload.applicantId;
   }
 
   async function checkDuplicate() {
     const email = String(fields.email || "").trim().toLowerCase();
     if (!isValidEmail(email)) return false;
-    const response = await fetch("/api/applications/check-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
-    });
-    const payload = await response.json();
-    setDuplicateMessage(payload.exists ? payload.message : "");
-    if (payload.exists) setErrors((prev) => ({ ...prev, email: payload.message }));
-    return Boolean(payload.exists);
+    try {
+      const response = await fetch("/api/applications/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const payload = await response.json();
+      setDuplicateMessage(payload.exists ? payload.message : "");
+      if (payload.exists) setErrors((prev) => ({ ...prev, email: payload.message }));
+      return Boolean(payload.exists);
+    } catch {
+      if (!staticPagesMode) return false;
+      const emails = JSON.parse(localStorage.getItem("sbp_setter_static_emails") || "[]") as string[];
+      const exists = emails.includes(email);
+      const message =
+        "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
+      setDuplicateMessage(exists ? message : "");
+      if (exists) setErrors((prev) => ({ ...prev, email: message }));
+      return exists;
+    }
   }
 
   function scheduleSave() {
@@ -169,6 +188,10 @@ export function ApplicationFunnel({ config }: Props) {
     };
     localStorage.setItem("sbp_setter_next_state", JSON.stringify(state));
     if (!applicantId) return;
+    if (staticPagesMode) {
+      setSaveState("Saved on this device.");
+      return;
+    }
     await fetch("/api/applications/autosave", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -179,6 +202,7 @@ export function ApplicationFunnel({ config }: Props) {
 
   async function track(eventType: string, metadata: Record<string, unknown> = {}) {
     if (!applicantId && eventType !== "application_started") return;
+    if (staticPagesMode) return;
     await fetch("/api/applications/event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -285,6 +309,14 @@ export function ApplicationFunnel({ config }: Props) {
     if (activeCallNumber.current) return;
     const assistantId = config.vapi.assistantIds[String(mockCallNumber) as "1" | "2" | "3"];
     if (!config.vapi.publicKey || !assistantId) {
+      if (staticPagesMode) {
+        activeCallNumber.current = mockCallNumber;
+        callStartedAt.current = Date.now();
+        updateMock(mockCallNumber, { status: "live", error: "", startedAt: new Date().toISOString(), vapiCallId: `static_mock_${mockCallNumber}_${Date.now()}` });
+        startTimer(mockCallNumber);
+        window.setTimeout(() => completeCall(mockCallNumber, "static_pages_simulated_call"), 5000);
+        return;
+      }
       updateMock(mockCallNumber, { status: "failed", error: "Vapi is not configured yet." });
       return;
     }
@@ -387,20 +419,39 @@ export function ApplicationFunnel({ config }: Props) {
       mockCalls,
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
     };
-    const response = await fetch("/api/applications/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const body = await response.json();
-    setSubmitting(false);
-    if (!response.ok) {
-      setErrors({ submit: body.message || body.error || "Submission failed." });
-      return;
+    try {
+      const response = await fetch("/api/applications/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json();
+      setSubmitting(false);
+      if (!response.ok) {
+        setErrors({ submit: body.message || body.error || "Submission failed." });
+        return;
+      }
+      setResult({ status: body.status, message: body.message, calendar: body.calendar });
+      localStorage.removeItem("sbp_setter_next_state");
+      track("application_submitted", { status: body.status });
+    } catch {
+      setSubmitting(false);
+      if (!staticPagesMode) {
+        setErrors({ submit: "Submission failed." });
+        return;
+      }
+      const email = String(fields.email || "").trim().toLowerCase();
+      const emails = JSON.parse(localStorage.getItem("sbp_setter_static_emails") || "[]") as string[];
+      if (!emails.includes(email)) localStorage.setItem("sbp_setter_static_emails", JSON.stringify([...emails, email]));
+      const submissions = JSON.parse(localStorage.getItem("sbp_setter_static_submissions") || "[]") as unknown[];
+      localStorage.setItem("sbp_setter_static_submissions", JSON.stringify([...submissions, { ...payload, submittedAt: new Date().toISOString() }]));
+      setResult({
+        status: "manual_review",
+        message: "Thank you for completing your application. We will review your submission and contact you if we decide to move forward.",
+        calendar: null
+      });
+      localStorage.removeItem("sbp_setter_next_state");
     }
-    setResult({ status: body.status, message: body.message, calendar: body.calendar });
-    localStorage.removeItem("sbp_setter_next_state");
-    track("application_submitted", { status: body.status });
   }
 
   function renderError(key: string) {
@@ -618,6 +669,7 @@ export function ApplicationFunnel({ config }: Props) {
             </section>
 
             <p className="privacy">Privacy and recording notice: application answers, engagement events, and mock-call artifacts may be stored and reviewed for hiring decisions. Private API keys and qualification rules are kept server-side.</p>
+            {staticPagesMode && <p className="privacy">GitHub Pages mode is active. Answers are saved on this device until the server-backed deployment is connected.</p>}
           </div>
         </section>
       </main>
