@@ -41,6 +41,7 @@ img, video, audio, iframe { max-width: 100%; }
 .topbar { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.94); backdrop-filter: blur(14px); }
 .topbar-inner { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 850; font-size: 20px; letter-spacing: -.03em; text-decoration: none; }
+.brand-button { padding: 0; border: 0; background: transparent; color: inherit; }
 .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: #fff; background: var(--primary); box-shadow: 0 8px 18px rgba(36,87,245,.25); }
 .topbar-meta { color: var(--muted); font-size: 14px; }
 .cover { min-height: calc(100svh - 68px); padding: 36px 0 54px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #ffffff 0%, #f6f8fc 100%); }

@@ -96,8 +96,9 @@ export function ApplicationFunnel({ config }: Props) {
       if (parsed.applicantId) setApplicantId(parsed.applicantId);
       if (parsed.currentStep) {
         setCurrentStep(Math.min(totalSteps, Math.max(1, parsed.currentStep)));
-        setStarted(true);
       }
+      if (typeof parsed.started === "boolean") setStarted(parsed.started);
+      else if (parsed.currentStep) setStarted(true);
       if (parsed.highestStep) setHighestStep(Math.min(totalSteps, Math.max(1, parsed.highestStep)));
       if (parsed.fields) setFields({ ...emptyFields, ...parsed.fields });
       if (parsed.callLibrary) setCallLibrary(parsed.callLibrary);
@@ -236,6 +237,24 @@ export function ApplicationFunnel({ config }: Props) {
     setCurrentStep((step) => Math.max(1, step));
     setHighestStep((step) => Math.max(1, step));
     track("application_started");
+  }
+
+  function returnToCover() {
+    const state = {
+      applicantId,
+      started: false,
+      currentStep,
+      highestStep,
+      fields,
+      callLibrary,
+      mockCalls,
+      scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
+    };
+    localStorage.setItem("sbp_setter_next_state", JSON.stringify(state));
+    setStarted(false);
+    setResult(null);
+    setSaveState("Saved on this device.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function validateStep(step: number) {
@@ -486,10 +505,10 @@ export function ApplicationFunnel({ config }: Props) {
     <div>
       <header className="topbar">
         <div className="container topbar-inner">
-          <a className="brand" href="/">
+          <button className="brand brand-button" type="button" onClick={returnToCover}>
             <span className="brand-mark">✓</span>
             <span>SolidBooked Pro</span>
-          </a>
+          </button>
           <span className="topbar-meta">Appointment Setter Application</span>
         </div>
       </header>
