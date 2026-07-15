@@ -476,6 +476,7 @@ begin
     resume_score_value := greatest(0, least(10, coalesce(nullif(payload->>'resumeScore', '')::numeric::integer, 0)));
     ai_application_analysis_value := coalesce(payload->'analysis', '{}'::jsonb);
     resume_analysis_value := coalesce(payload->'resumeAnalysis', '{}'::jsonb);
+    resume_text_value := left(coalesce(payload->>'resumeText', ''), 16000);
 
     update public.sbp_setter_applicants
     set
@@ -497,6 +498,10 @@ begin
 
     update public.sbp_setter_resume_files
     set
+      resume_text = case
+        when length(trim(resume_text_value)) > 0 then resume_text_value
+        else resume_text
+      end,
       resume_score = resume_score_value,
       resume_analysis = case
         when resume_analysis_value = '{}'::jsonb then resume_analysis
@@ -786,7 +791,11 @@ begin
     select coalesce(jsonb_agg(to_jsonb(a) || jsonb_build_object(
       'mock_calls_completed', coalesce(mc.completed_count, 0),
       'mock_average_score', coalesce(mc.average_score, a.internal_score),
-      'mock_scored_calls', coalesce(mc.scored_count, 0)
+      'mock_scored_calls', coalesce(mc.scored_count, 0),
+      'call_library_opened', coalesce(me.call_library_opened, 0),
+      'call_library_average_percent', coalesce(round(me.call_library_average_percent)::integer, 0),
+      'post_schedule_video_percent', coalesce(round(me.post_schedule_video_percent)::integer, 0),
+      'post_schedule_video_completed', coalesce(me.post_schedule_video_completed, false)
     ) order by coalesce(mc.average_score, a.internal_score, 0) desc, a.started_at desc), '[]'::jsonb)
     into rows_json
     from public.sbp_setter_applicants a
@@ -798,7 +807,26 @@ begin
         count(*) filter (where backend_score is not null) as scored_count
       from public.sbp_setter_mock_calls
       group by applicant_id
-    ) mc on mc.applicant_id = a.id;
+    ) mc on mc.applicant_id = a.id
+    left join (
+      select
+        applicant_id,
+        count(*) filter (
+          where media_type = 'call_recording'
+            and (started = true or seconds_consumed > 0 or percentage_consumed > 0)
+        ) as call_library_opened,
+        least(100, greatest(0, coalesce(sum(least(100, greatest(0, percentage_consumed))) filter (
+          where media_type = 'call_recording'
+        ), 0) / 3.0)) as call_library_average_percent,
+        max(least(100, greatest(0, percentage_consumed))) filter (
+          where media_type = 'post_schedule_video'
+        ) as post_schedule_video_percent,
+        bool_or(completed) filter (
+          where media_type = 'post_schedule_video'
+        ) as post_schedule_video_completed
+      from public.sbp_setter_media_engagement
+      group by applicant_id
+    ) me on me.applicant_id = a.id;
     return jsonb_build_object('ok', true, 'applicants', rows_json);
   end if;
 

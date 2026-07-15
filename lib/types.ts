@@ -57,6 +57,10 @@ export type ApplicantRecord = {
   interview_scheduled_at: string | null;
   interview_details: Record<string, unknown> | null;
   hiring_stage_status: string | null;
+  call_library_average_percent?: number | null;
+  call_library_opened?: number | null;
+  post_schedule_video_percent?: number | null;
+  post_schedule_video_completed?: boolean | null;
   abandoned_at_step: number | null;
   hard_flags: string[] | null;
   reopened_at: string | null;

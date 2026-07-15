@@ -459,12 +459,15 @@ export function AdminDashboard() {
                 <th>Email</th>
                 <th>Location</th>
                 <th>Desired pay</th>
+                <th>Application status</th>
                 <th>Fit status</th>
                 <th>Interview status</th>
                 <th>Start date</th>
                 <th>Availability</th>
                 <th>AI score</th>
                 <th>Mock calls</th>
+                <th>Call listening</th>
+                <th>End video</th>
                 <th>Vocaroo link</th>
                 <th>Appointment setting experience</th>
               </tr>
@@ -477,12 +480,15 @@ export function AdminDashboard() {
                   <td>{applicant.normalized_email}</td>
                   <td>{formatApplicantLocation(applicant)}</td>
                   <td>{applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""}</td>
+                  <td>{formatStatusLabel(applicant.application_status)}</td>
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
                   <td>{formatStatusLabel(applicant.interview_status || "not_displayed")}</td>
                   <td>{formatDate(applicant.earliest_start_date)}</td>
                   <td>{formatAvailability(applicant.availability_est)}</td>
                   <td>{formatScore(getApplicantScore(applicant))}</td>
                   <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
+                  <td>{formatPercent(getCallLibraryAveragePercent(applicant))}</td>
+                  <td>{formatPercent(getPostScheduleVideoPercent(applicant))}</td>
                   <td>{applicant.vocaroo_url ? <a className="table-link" href={applicant.vocaroo_url} target="_blank" rel="noreferrer">Open link</a> : ""}</td>
                   <td>{truncate(applicant.appointment_setting_experience || "", 140)}</td>
                 </tr>
@@ -975,6 +981,9 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
   const fields = submission.fields || {};
   const now = new Date().toISOString();
   const completed = Boolean(submission.submittedAt);
+  const callLibrary = Array.isArray(submission.callLibrary) ? submission.callLibrary : [];
+  const callRecordings = callLibrary.filter((item) => item.mediaType === "call_recording");
+  const postScheduleVideo = callLibrary.find((item) => item.mediaType === "post_schedule_video");
   const base: ApplicantRecord = {
     id: submission.applicantId,
     full_name: fields.fullName || null,
@@ -1014,6 +1023,10 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     interview_scheduled_at: null,
     interview_details: null,
     hiring_stage_status: null,
+    call_library_average_percent: calculateCallLibraryAveragePercent(callRecordings),
+    call_library_opened: callRecordings.filter((item) => item.started || item.secondsConsumed > 0 || item.percentageConsumed > 0).length,
+    post_schedule_video_percent: postScheduleVideo?.percentageConsumed || null,
+    post_schedule_video_completed: postScheduleVideo?.completed || false,
     abandoned_at_step: completed ? null : submission.currentStep || 1,
     hard_flags: null,
     reopened_at: null,
@@ -1033,6 +1046,32 @@ function getMockCallsCompleted(applicantId: string, applicants: ApplicantRecord[
 function getApplicantScore(applicant: ApplicantRecord) {
   const withAggregates = applicant as ApplicantRecord & { mock_average_score?: number; mockAverageScore?: number };
   return Number(withAggregates.mock_average_score || withAggregates.mockAverageScore || applicant.internal_score || 0);
+}
+
+function getCallLibraryAveragePercent(applicant: ApplicantRecord) {
+  const direct = Number(applicant.call_library_average_percent ?? 0);
+  if (direct) return direct;
+  const submission = getStaticSubmissions().find((item) => item.applicantId === applicant.id);
+  const callRecordings = (submission?.callLibrary || []).filter((item) => item.mediaType === "call_recording");
+  return calculateCallLibraryAveragePercent(callRecordings);
+}
+
+function calculateCallLibraryAveragePercent(callRecordings: MediaEngagementInput[]) {
+  const total = callRecordings.reduce((sum, item) => sum + clampPercent(Number(item.percentageConsumed || 0)), 0);
+  return total ? total / 3 : 0;
+}
+
+function getPostScheduleVideoPercent(applicant: ApplicantRecord) {
+  const direct = Number(applicant.post_schedule_video_percent ?? 0);
+  if (direct) return direct;
+  const submission = getStaticSubmissions().find((item) => item.applicantId === applicant.id);
+  const postScheduleVideo = (submission?.callLibrary || []).find((item) => item.mediaType === "post_schedule_video");
+  return Number(postScheduleVideo?.percentageConsumed || 0);
+}
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
 }
 
 function getFitStatusRank(value?: string | null) {
@@ -1187,6 +1226,11 @@ function formatScore(score: number) {
   return score ? `${Math.round(score)}/100` : "";
 }
 
+function formatPercent(value?: number | null) {
+  const numeric = Number(value || 0);
+  return numeric ? `${Math.round(clampPercent(numeric))}%` : "";
+}
+
 function formatReadableValue(value: unknown): string {
   if (value === null || value === undefined || value === "") return "Not provided";
   if (Array.isArray(value)) return value.length ? value.map(formatReadableValue).join(", ") : "None";
@@ -1281,19 +1325,42 @@ function formatStatusLabel(value: string) {
 }
 
 function toCsv(applicants: ApplicantRecord[]) {
-  const headers = ["Name", "Preferred name", "Email", "Location", "Desired pay", "Availability", "Start date", "Experience", "Status", "Fit status", "Interview", "Submitted"];
+  const headers = [
+    "Name",
+    "Preferred name",
+    "Email",
+    "Location",
+    "Desired pay",
+    "Application status",
+    "Fit status",
+    "Interview status",
+    "Start date",
+    "Availability",
+    "AI score",
+    "Mock calls completed",
+    "Call-library listening %",
+    "End video completion %",
+    "Vocaroo link",
+    "Appointment setting experience",
+    "Submitted"
+  ];
   const rows = applicants.map((a) => [
     a.full_name || "",
     a.preferred_name || "",
     a.normalized_email,
     formatApplicantLocation(a),
     a.desired_hourly_pay ? `$${a.desired_hourly_pay}/hr` : "",
-    formatAvailability(a.availability_est),
-    a.earliest_start_date || "",
-    a.appointment_setting_experience || "",
-    a.application_status,
+    formatStatusLabel(a.application_status),
     formatStatusLabel(a.hiring_stage_status || ""),
-    a.interview_status,
+    formatStatusLabel(a.interview_status || "not_displayed"),
+    formatDate(a.earliest_start_date),
+    formatAvailability(a.availability_est),
+    formatScore(getApplicantScore(a)),
+    getMockCallsCompleted(a.id, applicants),
+    formatPercent(getCallLibraryAveragePercent(a)),
+    formatPercent(getPostScheduleVideoPercent(a)),
+    a.vocaroo_url || "",
+    a.appointment_setting_experience || "",
     a.submitted_at || ""
   ]);
   return [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll("\"", "\"\"")}"`).join(",")).join("\n");

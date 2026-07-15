@@ -43,6 +43,17 @@ function readableAvailability(value) {
   return [value.start, value.end].filter(Boolean).join(' to ');
 }
 
+function extractResponseText(response) {
+  if (typeof response?.output_text === 'string') return response.output_text;
+  const pieces = [];
+  for (const output of response?.output || []) {
+    for (const item of output?.content || []) {
+      if (typeof item?.text === 'string') pieces.push(item.text);
+    }
+  }
+  return pieces.join('\\n').trim();
+}
+
 async function bridge(action, payload) {
   const response = await helpers.httpRequest({
     method: 'POST',
@@ -78,6 +89,51 @@ try {
   resume = {};
 }
 
+let resumeTextForScoring = String(resume.resumeText || '').trim();
+let resumeTextSource = resumeTextForScoring ? 'browser_extracted_text' : 'none';
+
+if (resumeTextForScoring.length < 100 && resume.fileBase64) {
+  const fileType = String(resume.fileType || 'application/pdf');
+  const fileName = String(resume.fileName || applicant.resume_file_name || 'resume.pdf');
+  const fileData = 'data:' + fileType + ';base64,' + String(resume.fileBase64 || '');
+  const extractionResponse = await helpers.httpRequest({
+    method: 'POST',
+    url: 'https://api.openai.com/v1/responses',
+    headers: {
+      Authorization: 'Bearer ' + OPENAI_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: {
+      model: 'gpt-4o-mini',
+      temperature: 0.1,
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_file',
+              filename: fileName,
+              file_data: fileData
+            },
+            {
+              type: 'input_text',
+              text: 'Extract the candidate resume into concise plain text for hiring review. Preserve names, roles, companies, dates, tools, sales/calling experience, metrics, and achievements. If the file is an image or scan, read visible text. Return only the extracted resume text, maximum 12000 characters.'
+            }
+          ]
+        }
+      ]
+    },
+    json: true,
+    ignoreHttpStatusErrors: true,
+    timeout: 60000
+  });
+  const extracted = extractResponseText(extractionResponse);
+  if (extracted && extracted.length > resumeTextForScoring.length) {
+    resumeTextForScoring = extracted.slice(0, 16000);
+    resumeTextSource = 'openai_file_input';
+  }
+}
+
 const packet = {
   applicant_id: applicantId,
   role: 'Remote appointment setter for SolidBooked Pro, calling warm and cold business owners during U.S. Eastern hours.',
@@ -97,8 +153,9 @@ const packet = {
   },
   resume: {
     file_name: resume.fileName || applicant.resume_file_name,
-    text: String(resume.resumeText || '').slice(0, 14000),
-    text_extracted: Boolean(resume.resumeText),
+    text: resumeTextForScoring.slice(0, 14000),
+    text_extracted: Boolean(resumeTextForScoring),
+    text_source: resumeTextSource,
     prior_resume_analysis: applicant.resume_analysis || resume.resumeAnalysis || null
   },
   scoring_rubric_total_70: {
@@ -208,8 +265,9 @@ const resumeAnalysis = {
   summary: ai.resume_assessment || ai.resumeAssessment || '',
   strengths: Array.isArray(ai.strengths) ? ai.strengths : [],
   concerns: Array.isArray(ai.concerns) ? ai.concerns : [],
-  textExtracted: Boolean(resume.resumeText),
-  extractedCharacters: String(resume.resumeText || '').length,
+  textExtracted: Boolean(resumeTextForScoring),
+  extractedCharacters: String(resumeTextForScoring || '').length,
+  textSource: resumeTextSource,
   aiScored: true,
   score: resumeScore
 };
@@ -220,7 +278,8 @@ const saved = await bridge('ai_application_score', {
   applicationScore,
   resumeScore,
   analysis,
-  resumeAnalysis
+  resumeAnalysis,
+  resumeText: resumeTextForScoring
 });
 
 return [{
@@ -228,8 +287,9 @@ return [{
     ok: true,
     applicantId,
     applicationScore,
-    resumeScore,
-    recommendation: analysis.recommendation,
+        resumeScore,
+        resumeTextSource,
+        recommendation: analysis.recommendation,
     saved
   }
 }];
