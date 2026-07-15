@@ -550,17 +550,14 @@ export function ApplicationFunnel({ config }: Props) {
                   <div className="path-grid">
                     <article>
                       <span>Low Ticket</span>
-                      <p>We build them a website and get them ranked online.</p>
+                      <p>We build them a website and get them ranked online. Our model is show first then sell. So we build and prepare everything first, send it to them and if they are interested they can pay for it.</p>
                     </article>
                     <article>
                       <span>High Ticket</span>
-                      <p>We send them qualified customers. Our main guarantee is if the customer does not show up, they do not pay for the lead.</p>
+                      <p>We run ad campaigns and send them qualified customers. Our guarantee to the business owners is, if the customer/lead does not show up, they do not pay for the lead.</p>
                     </article>
                   </div>
-                </div>
-
-                <div className="cover-columns">
-                  <article className="cover-panel">
+                  <article className="what-you-do">
                     <p className="kicker">What you will do</p>
                     <p>We have both warm and cold business owners that need to be contacted and scheduled on the calendar.</p>
                     <ul className="clean-list">
@@ -568,7 +565,10 @@ export function ApplicationFunnel({ config }: Props) {
                       <li><strong>Cold prospect (60%):</strong> We identified they need our service, like a business with a website that is not working or a business that is not getting enough customers, but they have not opted in yet.</li>
                     </ul>
                   </article>
-                  <article className="cover-panel">
+                </div>
+
+                <div className="fit-grid">
+                  <article className="cover-panel succeeds-panel">
                     <p className="kicker">Who succeeds here</p>
                     <ul className="check-list">
                       <li>Comfortable speaking with cold and warm prospects all day.</li>
@@ -577,14 +577,13 @@ export function ApplicationFunnel({ config }: Props) {
                       <li>Has previous experience in a similar role.</li>
                     </ul>
                   </article>
-                </div>
-
-                <div className="cover-panel not-fit">
-                  <p className="kicker">This is not for you if</p>
-                  <ul className="clean-list two-up">
-                    <li>You dislike phone conversations or avoid follow-up.</li>
-                    <li>You have no rapport or sales training.</li>
-                  </ul>
+                  <article className="cover-panel not-fit">
+                    <p className="kicker">This is not for you if</p>
+                    <ul className="clean-list">
+                      <li>You dislike phone conversations or avoid follow-up.</li>
+                      <li>You have no rapport or sales training.</li>
+                    </ul>
+                  </article>
                 </div>
               </section>
 
@@ -781,10 +780,16 @@ export function ApplicationFunnel({ config }: Props) {
                             <h3>{call.title}</h3>
                             <p>{call.description}</p>
                             <span className="media-meta">Call Duration: {call.durationLabel}</span>
-                            {call.url ? <audio controls src={call.url} onPlay={() => updateLibrary(index, { started: true, replayCount: callLibrary[index].started ? callLibrary[index].replayCount + 1 : 0 })} onTimeUpdate={(event) => {
-                              const audio = event.currentTarget;
-                              updateLibrary(index, { secondsConsumed: Math.round(audio.currentTime), percentageConsumed: audio.duration ? Math.max(callLibrary[index].percentageConsumed, Math.round((audio.currentTime / audio.duration) * 100)) : 0 });
-                            }} onEnded={() => updateLibrary(index, { completed: true, percentageConsumed: 100 })} /> : <div className="notice">Audio player slot ready. Add URL in configuration.</div>}
+                            {call.url ? (
+                              <CallRecordingPlayer
+                                title={call.title}
+                                src={call.url}
+                                engagement={callLibrary[index]}
+                                onEngagement={(patch) => updateLibrary(index, patch)}
+                              />
+                            ) : (
+                              <div className="notice">Audio player slot ready. Add URL in configuration.</div>
+                            )}
                           </article>
                         ))}
                       </div>
@@ -861,6 +866,110 @@ export function ApplicationFunnel({ config }: Props) {
   function updateLibrary(index: number, patch: Partial<MediaEngagementInput>) {
     setCallLibrary((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }
+}
+
+function CallRecordingPlayer({
+  title,
+  src,
+  engagement,
+  onEngagement
+}: {
+  title: string;
+  src: string;
+  engagement: MediaEngagementInput;
+  onEngagement: (patch: Partial<MediaEngagementInput>) => void;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastTrackedSecond = useRef(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [loadError, setLoadError] = useState("");
+
+  function togglePlayback() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      audio.play().catch(() => setLoadError("The recording could not start. Open it in a new tab and try again."));
+      return;
+    }
+    audio.pause();
+  }
+
+  function trackProgress(time: number, total: number) {
+    if (!total || !Number.isFinite(total)) return;
+    const roundedSecond = Math.round(time);
+    if (roundedSecond - lastTrackedSecond.current < 4 && roundedSecond !== Math.round(total)) return;
+    lastTrackedSecond.current = roundedSecond;
+    onEngagement({
+      secondsConsumed: Math.max(engagement.secondsConsumed, roundedSecond),
+      percentageConsumed: Math.max(engagement.percentageConsumed, Math.round((time / total) * 100))
+    });
+  }
+
+  return (
+    <div className="call-player">
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        src={src}
+        onLoadedMetadata={(event) => {
+          setDuration(event.currentTarget.duration || 0);
+          setLoadError("");
+        }}
+        onPlay={() => {
+          setIsPlaying(true);
+          onEngagement({ started: true, replayCount: engagement.started ? engagement.replayCount + 1 : engagement.replayCount });
+        }}
+        onPause={() => {
+          const audio = audioRef.current;
+          setIsPlaying(false);
+          if (audio) trackProgress(audio.currentTime, audio.duration);
+        }}
+        onTimeUpdate={(event) => {
+          const audio = event.currentTarget;
+          setCurrentTime(audio.currentTime);
+          trackProgress(audio.currentTime, audio.duration);
+        }}
+        onEnded={() => {
+          setIsPlaying(false);
+          setCurrentTime(duration);
+          onEngagement({ completed: true, percentageConsumed: 100, secondsConsumed: Math.round(duration) });
+        }}
+        onError={() => setLoadError("The recording is having trouble loading. Open it in a new tab and try again.")}
+      />
+      <div className="call-player-main">
+        <button className="player-button" type="button" onClick={togglePlayback} aria-label={`${isPlaying ? "Pause" : "Play"} ${title}`}>
+          {isPlaying ? "Pause" : "Play"}
+        </button>
+        <div className="player-track">
+          <input
+            aria-label={`${title} playback progress`}
+            type="range"
+            min="0"
+            max={duration || 0}
+            value={Math.min(currentTime, duration || currentTime)}
+            step="0.1"
+            onChange={(event) => {
+              const audio = audioRef.current;
+              const nextTime = Number(event.target.value);
+              setCurrentTime(nextTime);
+              if (audio) audio.currentTime = nextTime;
+            }}
+          />
+          <div className="player-time">
+            <span>{formatDuration(Math.round(currentTime))}</span>
+            <span>{duration ? formatDuration(Math.round(duration)) : "--:--"}</span>
+          </div>
+        </div>
+      </div>
+      {loadError && (
+        <p className="player-error">
+          {loadError} <a href={src} target="_blank" rel="noreferrer">Open recording</a>
+        </p>
+      )}
+    </div>
+  );
 }
 
 function Field({ id, label, value, onChange, error, type = "text", full = false, helper, min, onBlur, compact = false }: {
