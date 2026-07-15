@@ -767,6 +767,10 @@ export function ApplicationFunnel({ config }: Props) {
                     <p>You will be using our CRM and dialer. We use Hubstaff for time tracking and pay. Hubstaff supports paying you via Wise, PayPal, Payoneer and several other payment providers.</p>
                   </details>
                   <details>
+                    <summary>How will I be paid?</summary>
+                    <p>We use Hubstaff for time tracking and pay. Hubstaff supports paying you via Wise, PayPal, Payoneer and several other payment providers you can choose from.</p>
+                  </details>
+                  <details>
                     <summary>Do I work weekends?</summary>
                     <p>Normal work days are Monday to Friday. Weekends are optional if you choose to work those days as well.</p>
                   </details>
