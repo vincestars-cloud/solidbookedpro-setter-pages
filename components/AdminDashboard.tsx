@@ -708,8 +708,8 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
           const score = getCallScore(call);
           const structured = getStructuredOutput(call);
           const moments = extractObjectionMoments(structured);
-          const transcript = String(call.transcript || "");
           const recordingUrl = getRecordingUrl(call, structured);
+          const transcript = getTranscript(call, structured);
           const vapiCallId = String(call.vapi_call_id || call.vapiCallId || "");
           const endedReason = String(call.ended_reason || call.endedReason || "");
           return (
@@ -753,12 +753,7 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
                 )}
               </div>
 
-              {transcript && (
-                <details className="transcript-block">
-                  <summary>Transcript</summary>
-                  <p>{transcript}</p>
-                </details>
-              )}
+              <TranscriptView transcript={transcript} />
 
               {structured && (
                 <details className="transcript-block">
@@ -882,6 +877,61 @@ function QuoteBlock({ label, value, highlight = false }: { label: string; value:
       <p>{value}</p>
     </div>
   );
+}
+
+function TranscriptView({ transcript }: { transcript: string }) {
+  if (!transcript) {
+    return (
+      <div className="transcript-readable transcript-empty">
+        <div className="transcript-readable-head">
+          <strong>Transcript</strong>
+          <span>Not saved yet</span>
+        </div>
+        <p>No transcript has landed for this call yet. If the call just ended, refresh after the Vapi end-of-call report finishes.</p>
+      </div>
+    );
+  }
+  const turns = parseTranscriptTurns(transcript);
+  return (
+    <section className="transcript-readable">
+      <div className="transcript-readable-head">
+        <strong>Transcript</strong>
+        <span>{turns.length ? `${turns.length} turns` : "Raw transcript"}</span>
+      </div>
+      {turns.length ? (
+        <div className="transcript-turns">
+          {turns.map((turn, index) => (
+            <div className={`transcript-turn ${turn.speaker === "applicant" ? "applicant" : "prospect"}`} key={`${turn.speaker}-${index}`}>
+              <span>{turn.speaker === "applicant" ? "Applicant" : "Prospect"}</span>
+              <p>{turn.text}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="transcript-raw">{transcript}</p>
+      )}
+    </section>
+  );
+}
+
+function parseTranscriptTurns(transcript: string) {
+  const turns: Array<{ speaker: "applicant" | "prospect"; text: string }> = [];
+  for (const rawLine of transcript.split(/\n+/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = line.match(/^(Applicant|User|Customer|Prospect|Assistant|AI|Bot)\s*:\s*(.+)$/i);
+    if (!match) {
+      const last = turns[turns.length - 1];
+      if (last) last.text = `${last.text} ${line}`.trim();
+      continue;
+    }
+    const label = match[1].toLowerCase();
+    turns.push({
+      speaker: ["applicant", "user", "customer"].includes(label) ? "applicant" : "prospect",
+      text: match[2].trim()
+    });
+  }
+  return turns;
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
@@ -1147,6 +1197,19 @@ function getRecordingUrl(call: MockCallRecord, structured: Record<string, any> |
     structured?.artifacts?.recording_url
   ];
   return String(candidates.find((value) => typeof value === "string" && /^https?:\/\//i.test(value)) || "");
+}
+
+function getTranscript(call: MockCallRecord, structured: Record<string, any> | null) {
+  const candidates = [
+    call.transcript,
+    call.artifact?.transcript,
+    call.artifacts?.transcript,
+    structured?.transcript,
+    structured?.artifact?.transcript,
+    structured?.artifacts?.transcript,
+    structured?.raw?.transcript
+  ];
+  return String(candidates.find((value) => typeof value === "string" && value.trim()) || "");
 }
 
 function extractObjectionMoments(structured: Record<string, any> | null): ObjectionMoment[] {

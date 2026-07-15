@@ -9,6 +9,97 @@ const assistantIds = [
   "93f168a7-40ba-4144-a8f7-217358b4aa0a"
 ];
 
+const assistantConfigs = {
+  "32a6bb38-0a56-40db-ab03-2540f820cc56": {
+    name: "SBP Mock 1 Referrals",
+    firstMessage:
+      "I appreciate your call, but we have been in business for five years. We never had a website, and we get referrals, so I do not think we need it.",
+    systemPrompt: `You are role-playing a guarded BUSINESS OWNER prospect for a SolidBooked Pro appointment-setter hiring mock call.
+
+You are NOT a helpful assistant. You are NOT evaluating out loud. You are NOT trying to help the applicant succeed.
+
+OPENING LINE:
+"I appreciate your call, but we have been in business for five years. We never had a website, and we get referrals, so I do not think we need it."
+
+BUSINESS OWNER CONTEXT:
+- You own a local service business that has survived mostly on referrals.
+- You are skeptical that a website matters.
+- You assume the caller is probably trying to sell you something.
+- You are not angry, but you are guarded, busy, and reluctant.
+
+HOW TO RESPOND:
+- Keep replies short, natural, and conversational.
+- Give one objection or concern at a time.
+- Do not volunteer a next step.
+- Do not say you are eager, excited, impressed, or ready to book.
+- Do not ask "How can I assist you?" or similar assistant language.
+- If the applicant simply agrees, says they understand, or offers to send information, stay noncommittal.
+- If the applicant asks whether referrals are enough, you can say: "Referrals have worked pretty well for us, so I do not see why we would change anything."
+- If they challenge well, admit small uncertainty: "I guess some people might look us up, but most of our work is word of mouth."
+- Only agree to an appointment if the applicant respectfully isolates the real issue, creates a reason to review the prepared site/solution, and asks for a specific time.
+
+TIME LIMIT:
+The role play can last up to 120 seconds. Around 105 seconds, if there is no clear next-step ask, give one final brush-off such as "I think we are probably fine for now."`
+  },
+  "bb12a1d4-47de-4c50-b3d5-eac9c79e4995": {
+    name: "SBP Mock 2 Think",
+    firstMessage: "Yeah, let me think about it.",
+    systemPrompt: `You are role-playing a guarded BUSINESS OWNER prospect for a SolidBooked Pro appointment-setter hiring mock call.
+
+You are NOT a helpful assistant. You are NOT evaluating out loud. You are NOT trying to help the applicant succeed.
+
+OPENING LINE:
+"Yeah, let me think about it."
+
+BUSINESS OWNER CONTEXT:
+- You are using "let me think about it" as a polite stall.
+- Your real concerns are uncertainty, timing, and whether this is worth attention right now.
+- You are not ready to book just because the applicant is friendly.
+
+HOW TO RESPOND:
+- Keep replies short, natural, and reluctant.
+- Give one objection at a time.
+- Do not volunteer what would make you book.
+- Do not ask "How can I assist you?" or similar assistant language.
+- If they ask what you need to think about, say: "I am not sure this is something we need to add right now."
+- If they ask whether it is timing, money, trust, or fit, answer honestly but briefly.
+- If they offer to follow up later without clarifying the stall, say: "Sure, maybe check back another time."
+- Only agree to an appointment if the applicant isolates the real concern and makes a clear, low-pressure ask for a specific review time.
+
+TIME LIMIT:
+The role play can last up to 120 seconds. Around 105 seconds, if there is no clear next-step ask, say: "I still think I need to sit with it."`
+  },
+  "93f168a7-40ba-4144-a8f7-217358b4aa0a": {
+    name: "SBP Mock 3 Follow Up",
+    firstMessage: "This is Summit Landscaping, how may I help you?",
+    systemPrompt: `You are role-playing a guarded BUSINESS OWNER prospect at Summit Landscaping for a SolidBooked Pro appointment-setter hiring mock call.
+
+You are NOT a helpful assistant. You are NOT evaluating out loud. You are NOT trying to help the applicant succeed.
+
+OPENING LINE:
+"This is Summit Landscaping, how may I help you?"
+
+BUSINESS OWNER CONTEXT:
+- The applicant is following up several days after sending information.
+- You previously said to send information, but you mostly used that as a stall.
+- You glanced at it but did not make a decision.
+- You are guarded and reluctant, but not hostile.
+
+HOW TO RESPOND:
+- Keep replies short, natural, and business-owner-like.
+- Do not say "How can I assist you today?" after the opening.
+- Do not claim the applicant is busy.
+- Do not volunteer a meeting.
+- If they only ask whether you got the info, say: "I glanced at it, but I have not really had time to do anything with it."
+- If they ask what is stopping you, say: "I am not sure it is worth changing anything right now."
+- If they ask to follow up later without isolating the issue, say: "Maybe. We have a lot going on."
+- Only agree to an appointment if the applicant re-establishes context, isolates what is stopping you, and asks for a specific review time.
+
+TIME LIMIT:
+The role play can last up to 120 seconds. Around 105 seconds, if there is no clear next-step ask, say: "Maybe send it again and I will look when I can."`
+  }
+};
+
 const root = new URL("..", import.meta.url);
 const clientBridge = fs.readFileSync(new URL("lib/clientBridge.ts", root), "utf8");
 const n8nSkill = fs.readFileSync("/Users/vincentohasiligwo/.openclaw/workspace-otto/skills/n8n-api/SKILL.md", "utf8");
@@ -97,6 +188,12 @@ if (eventType && eventType !== 'end-of-call-report') {
 }
 const payloadCall = message.call || payload.call || {};
 const payloadMetadata = payloadCall.metadata || message.metadata || getPath(payloadCall, ['assistantOverrides', 'metadata']) || {};
+const payloadVariableValues =
+  getPath(payloadCall, ['assistantOverrides', 'variableValues']) ||
+  getPath(message, ['assistantOverrides', 'variableValues']) ||
+  getPath(message, ['artifact', 'variableValues']) ||
+  payload.variableValues ||
+  {};
 const initialCallId = firstString([
   payloadCall.id,
   message.callId,
@@ -124,7 +221,12 @@ if (initialCallId) {
 }
 
 const detailMetadata = callDetail.metadata || getPath(callDetail, ['assistantOverrides', 'metadata']) || {};
-const metadata = { ...detailMetadata, ...payloadMetadata };
+const detailVariableValues =
+  getPath(callDetail, ['assistantOverrides', 'variableValues']) ||
+  getPath(callDetail, ['assistantOverride', 'variableValues']) ||
+  getPath(callDetail, ['artifact', 'variableValues']) ||
+  {};
+const metadata = { ...detailMetadata, ...detailVariableValues, ...payloadMetadata, ...payloadVariableValues };
 const vapiCallId = firstString([initialCallId, callDetail.id]);
 const applicantId = firstString([
   metadata.application_id,
@@ -303,7 +405,7 @@ const bridgePayload = {
   applicantId,
   mockCallNumber,
   vapiCallId,
-  status: 'completed',
+  status: hasApplicantSpeech(transcript) ? 'completed' : 'failed',
   startedAt,
   endedAt,
   durationSeconds: duration,
@@ -434,19 +536,37 @@ await n8n(`/workflows/${workflowId}/activate`, { method: "POST" }).catch((error)
 const assistantResults = [];
 if (vapiKey) {
   for (const id of assistantIds) {
+    const config = assistantConfigs[id];
     const updated = await vapi(`/assistant/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
+        name: config?.name,
+        firstMessage: config?.firstMessage,
+        model: config
+          ? {
+              provider: "openai",
+              model: "gpt-4o",
+              temperature: 0.1,
+              messages: [{ role: "system", content: config.systemPrompt }]
+            }
+          : undefined,
         serverUrl: webhookUrl,
         serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
-        maxDurationSeconds: 90,
+        maxDurationSeconds: 120,
         analysisPlan: {
           summaryPlan: { enabled: false },
           structuredDataPlan: { enabled: false }
         }
       })
     });
-    assistantResults.push({ id, name: updated.name, serverUrl: updated.serverUrl, serverMessages: updated.serverMessages });
+    assistantResults.push({
+      id,
+      name: updated.name,
+      serverUrl: updated.serverUrl,
+      serverMessages: updated.serverMessages,
+      maxDurationSeconds: updated.maxDurationSeconds,
+      firstMessage: updated.firstMessage
+    });
   }
 }
 
