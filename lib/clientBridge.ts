@@ -1,6 +1,6 @@
 const defaultSupabaseUrl = "https://xxxmrbrwucsqeqbmwggd.supabase.co";
 const defaultSupabaseAnonKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4eG1yYnJ3dWNzcWVxYm13Z2dkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNDExMTMsImV4cCI6MjA5NjgxNzExM30.sC-3VPR6x9DKwqxnsocUqa3N24A8Dc3yrCFM0bwH9ms";
+  "sb_publishable_bmDK1fkJqvGwACZdaa640g_T6yhzvaz";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || defaultSupabaseUrl;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseAnonKey;

@@ -280,7 +280,77 @@ begin
     limit 1;
 
     if found then
-      return jsonb_build_object('ok', true, 'duplicate', true, 'applicantId', applicant.id, 'message', duplicate_message);
+      if applicant.submitted_at is not null
+        or applicant.application_status in ('application_completed', 'qualified', 'manual_review', 'not_qualified', 'interview_scheduled', 'interview_completed', 'paid_trial', 'hired', 'rejected', 'withdrawn') then
+        return jsonb_build_object('ok', true, 'duplicate', true, 'applicantId', applicant.id, 'message', duplicate_message);
+      end if;
+
+      return jsonb_build_object(
+        'ok', true,
+        'duplicate', false,
+        'resumed', true,
+        'applicantId', applicant.id,
+        'state', jsonb_build_object(
+          'applicantId', applicant.id,
+          'started', true,
+          'currentStep', greatest(1, coalesce(applicant.current_step, 1)),
+          'highestStep', greatest(1, coalesce(applicant.current_step, 1)),
+          'fields', jsonb_build_object(
+            'fullName', coalesce(applicant.full_name, ''),
+            'preferredName', coalesce(applicant.preferred_name, ''),
+            'email', applicant.normalized_email,
+            'desiredHourly', applicant.desired_hourly_pay,
+            'earliestStartDate', coalesce(applicant.earliest_start_date::text, ''),
+            'availableStart', coalesce(applicant.availability_est->>'start', ''),
+            'availableEnd', coalesce(applicant.availability_est->>'end', ''),
+            'vocarooUrl', coalesce(applicant.vocaroo_url, ''),
+            'crmPlatforms', coalesce(applicant.crm_platforms, ''),
+            'appointmentSettingExperience', coalesce(applicant.appointment_setting_experience, ''),
+            'industries', coalesce(applicant.industries, ''),
+            'pastMetrics', coalesce(applicant.past_metrics, ''),
+            'resumeFileName', coalesce(applicant.resume_file_name, ''),
+            'resumeFileSize', coalesce(applicant.resume_file_size, 0),
+            'resumeFileType', coalesce(applicant.resume_file_type, ''),
+            'salesProcessAcknowledged', applicant.current_step >= 2,
+            'founderVideoAcknowledged', true,
+            'recordingConsent', true,
+            'accuracyConfirmation', false
+          ),
+          'location', jsonb_strip_nulls(jsonb_build_object(
+            'city', applicant.location_city,
+            'region', applicant.location_region,
+            'country', applicant.location_country,
+            'timezone', applicant.location_timezone
+          )),
+          'callLibrary', coalesce((
+            select jsonb_agg(jsonb_build_object(
+              'mediaType', media_type,
+              'mediaKey', media_key,
+              'started', started,
+              'secondsConsumed', seconds_consumed,
+              'percentageConsumed', percentage_consumed,
+              'completed', completed,
+              'replayCount', replay_count,
+              'pauseCount', pause_count
+            ) order by media_key)
+            from public.sbp_setter_media_engagement
+            where applicant_id = applicant.id
+          ), '[]'::jsonb),
+          'mockCalls', coalesce((
+            select jsonb_agg(jsonb_build_object(
+              'mockCallNumber', mock_call_number,
+              'vapiCallId', vapi_call_id,
+              'status', status,
+              'startedAt', started_at,
+              'endedAt', ended_at,
+              'durationSeconds', duration_seconds,
+              'endedReason', ended_reason
+            ) order by mock_call_number)
+            from public.sbp_setter_mock_calls
+            where applicant_id = applicant.id
+          ), '[]'::jsonb)
+        )
+      );
     end if;
 
     insert into public.sbp_setter_applicants (

@@ -183,19 +183,43 @@ export function ApplicationFunnel({ config }: Props) {
     setErrors((prev) => ({ ...prev, [key]: "" }));
   }
 
+  function hydrateServerState(state: Record<string, any>) {
+    const nextStep = Number(state.currentStep || 1);
+    const nextHighestStep = Number(state.highestStep || state.currentStep || 1);
+    if (state.fields) setFields((prev) => ({ ...prev, ...state.fields }));
+    if (state.location) setApplicantLocation(state.location);
+    if (Array.isArray(state.callLibrary)) {
+      const savedCalls = state.callLibrary.filter((item: MediaEngagementInput) => item.mediaType === "call_recording");
+      const savedPostVideo = state.callLibrary.find((item: MediaEngagementInput) => item.mediaType === "post_schedule_video");
+      if (savedCalls.length) setCallLibrary(savedCalls);
+      if (savedPostVideo) setPostScheduleVideo({ ...initialPostScheduleVideo, ...savedPostVideo });
+    }
+    if (Array.isArray(state.mockCalls) && state.mockCalls.length) setMockCalls(state.mockCalls);
+    setCurrentStep(Math.min(totalSteps, Math.max(1, nextStep)));
+    setHighestStep(Math.min(totalSteps, Math.max(1, nextHighestStep)));
+    setStarted(true);
+    localStorage.setItem("sbp_setter_next_state", JSON.stringify(state));
+  }
+
   async function ensureSession(emailValue = fields.email) {
     const email = String(emailValue || "").trim().toLowerCase();
     if (!isValidEmail(email)) return null;
     if (applicantId) return applicantId;
     try {
       if (staticPagesMode && setterBridgeUrl) {
-        const payload = await setterBridgeRequest<{ applicantId: string; duplicate?: boolean; message?: string }>("session", { email, location: applicantLocation });
+        const payload = await setterBridgeRequest<{ applicantId: string; duplicate?: boolean; resumed?: boolean; state?: Record<string, any>; message?: string }>("session", { email, location: applicantLocation });
         if (payload.duplicate) {
           setDuplicateMessage(payload.message || duplicateApplicationMessage);
           setErrors((prev) => ({ ...prev, email: payload.message || duplicateApplicationMessage }));
           return null;
         }
         setApplicantId(payload.applicantId);
+        if (payload.state) hydrateServerState(payload.state);
+        if (payload.resumed) {
+          setDuplicateMessage("");
+          setErrors((prev) => ({ ...prev, email: "" }));
+          setSaveState("Restored from your email.");
+        }
         track("valid_email_entered", { email, applicantId: payload.applicantId });
         return payload.applicantId;
       }
@@ -229,12 +253,12 @@ export function ApplicationFunnel({ config }: Props) {
     }
   }
 
-  async function checkDuplicate() {
+  async function checkDuplicate(currentApplicantId = applicantId) {
     const email = String(fields.email || "").trim().toLowerCase();
     if (!isValidEmail(email)) return false;
     try {
       if (staticPagesMode && setterBridgeUrl) {
-        const payload = await setterBridgeRequest<{ exists: boolean; message?: string }>("check_email", { email, applicantId });
+        const payload = await setterBridgeRequest<{ exists: boolean; message?: string }>("check_email", { email, applicantId: currentApplicantId });
         setDuplicateMessage(payload.exists ? payload.message || duplicateApplicationMessage : "");
         if (payload.exists) setErrors((prev) => ({ ...prev, email: payload.message || duplicateApplicationMessage }));
         return Boolean(payload.exists);
@@ -925,7 +949,7 @@ export function ApplicationFunnel({ config }: Props) {
                       <div className="grid compact-form">
                         <Field id="fullName" label="Full name" value={fields.fullName} onChange={(v) => updateField("fullName", v)} error={renderError("fullName")} />
                         <Field id="preferredName" label="Preferred name" value={fields.preferredName} onChange={(v) => updateField("preferredName", v)} error={renderError("preferredName")} />
-                        <Field id="email" label="Email address" type="email" value={fields.email} onBlur={() => ensureSession().then(checkDuplicate)} onChange={(v) => updateField("email", v)} error={renderError("email")} />
+                        <Field id="email" label="Email address" type="email" value={fields.email} onBlur={() => ensureSession().then((id) => checkDuplicate(id || applicantId))} onChange={(v) => updateField("email", v)} error={renderError("email")} />
                         <Field id="desiredHourly" label="Desired hourly pay in USD" type="number" value={fields.desiredHourly} onChange={(v) => updateField("desiredHourly", Number(v) as any)} error={renderError("desiredHourly")} compact />
                         <Field id="earliestStartDate" label="Earliest start date" type="date" min={tomorrow} value={fields.earliestStartDate} onChange={(v) => updateField("earliestStartDate", v)} error={renderError("earliestStartDate")} compact />
                         <div className={`field availability-field ${errors.availableEnd ? "has-error" : ""}`}>
