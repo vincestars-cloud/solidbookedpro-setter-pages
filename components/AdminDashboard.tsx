@@ -308,7 +308,7 @@ export function AdminDashboard() {
                   <Answer label="Availability" value={selected.applicant.availability_est ? `${selected.applicant.availability_est.start}-${selected.applicant.availability_est.end} ET` : ""} />
                   <Answer label="Earliest start" value={selected.applicant.earliest_start_date} />
                   <Answer label="Vocaroo" value={selected.applicant.vocaroo_url} />
-                  <Answer label="Resume" value={selected.raw?.fields?.resumeFileName || ""} />
+                  <Answer label="Resume" value={selected.applicant.resume_file_name || selected.raw?.fields?.resumeFileName || ""} />
                 </div>
                 <div className="field full">
                   <label htmlFor="note">Internal notes</label>
@@ -403,6 +403,8 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     appointment_setting_experience: fields.appointmentSettingExperience || null,
     industries: fields.industries || null,
     past_metrics: fields.pastMetrics || null,
+    resume_file_name: fields.resumeFileName || null,
+    resume_file_size: fields.resumeFileSize || null,
     application_status: completed ? "application_completed" : "started",
     qualification_status: completed ? "manual_review" : null,
     internal_score: null,

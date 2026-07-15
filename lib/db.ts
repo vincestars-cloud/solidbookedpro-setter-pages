@@ -3,6 +3,15 @@ import type { ApplicantRecord, ApplicationFields, QualificationStatus } from "./
 import { normalizeEmail } from "./validators";
 
 type DbFilter = Record<string, string | number | boolean | null | undefined>;
+type LogicalTable =
+  | "applicants"
+  | "application_events"
+  | "media_engagement"
+  | "mock_calls"
+  | "scenario_responses"
+  | "admin_notes";
+
+const table = (name: LogicalTable) => `${privateConfig.supabaseTablePrefix}${name}`;
 
 const headers = () => {
   if (!privateConfig.supabaseUrl || !privateConfig.supabaseServiceRoleKey) {
@@ -16,9 +25,10 @@ const headers = () => {
   };
 };
 
-function restUrl(table: string, filters?: DbFilter, select = "*") {
+function restUrl(table: string, filters?: DbFilter, select = "*", onConflict?: string) {
   const url = new URL(`${privateConfig.supabaseUrl.replace(/\/$/, "")}/rest/v1/${table}`);
   url.searchParams.set("select", select);
+  if (onConflict) url.searchParams.set("on_conflict", onConflict);
   if (filters) {
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined) url.searchParams.set(key, value === null ? "is.null" : `eq.${value}`);
@@ -27,8 +37,8 @@ function restUrl(table: string, filters?: DbFilter, select = "*") {
   return url.toString();
 }
 
-async function request<T>(table: string, init: RequestInit & { filters?: DbFilter; select?: string } = {}) {
-  const response = await fetch(restUrl(table, init.filters, init.select), {
+async function request<T>(tableName: LogicalTable, init: RequestInit & { filters?: DbFilter; select?: string; onConflict?: string } = {}) {
+  const response = await fetch(restUrl(table(tableName), init.filters, init.select, init.onConflict), {
     ...init,
     headers: {
       ...headers(),
@@ -93,6 +103,8 @@ export async function updateApplicantFields(id: string, fields: Partial<Applicat
   if (fields.appointmentSettingExperience !== undefined) patch.appointment_setting_experience = fields.appointmentSettingExperience;
   if (fields.industries !== undefined) patch.industries = fields.industries;
   if (fields.pastMetrics !== undefined) patch.past_metrics = fields.pastMetrics;
+  if (fields.resumeFileName !== undefined) patch.resume_file_name = fields.resumeFileName;
+  if (fields.resumeFileSize !== undefined) patch.resume_file_size = fields.resumeFileSize;
   if (currentStep !== undefined) patch.current_step = currentStep;
   if (highestStep !== undefined) patch.application_status = statusFromStep(highestStep);
   patch.updated_at = new Date().toISOString();
@@ -122,6 +134,7 @@ export async function saveMediaEngagement(applicantId: string, items: Array<Reco
   if (!items.length) return;
   await request("media_engagement", {
     method: "POST",
+    onConflict: "applicant_id,media_type,media_key",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify(
       items.map((item) => ({
@@ -144,6 +157,7 @@ export async function saveScenarioResponses(applicantId: string, responses: Arra
   if (!responses.length) return;
   await request("scenario_responses", {
     method: "POST",
+    onConflict: "applicant_id,question_key",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify(
       responses.map((response) => ({
@@ -159,6 +173,7 @@ export async function saveScenarioResponses(applicantId: string, responses: Arra
 export async function upsertMockCall(applicantId: string, call: Record<string, unknown>) {
   await request("mock_calls", {
     method: "POST",
+    onConflict: "applicant_id,mock_call_number",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({
       applicant_id: applicantId,

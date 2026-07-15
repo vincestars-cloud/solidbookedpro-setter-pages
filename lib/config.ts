@@ -82,6 +82,7 @@ export const publicConfig: PublicConfig = {
 export const privateConfig = {
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  supabaseTablePrefix: process.env.SUPABASE_TABLE_PREFIX ?? "sbp_setter_",
   adminUsername: process.env.ADMIN_USERNAME || "admin",
   adminPassword: process.env.ADMIN_PASSWORD || "",
   adminToken: process.env.ADMIN_API_TOKEN || "",

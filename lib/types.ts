@@ -32,6 +32,8 @@ export type ApplicantRecord = {
   appointment_setting_experience: string | null;
   industries: string | null;
   past_metrics: string | null;
+  resume_file_name: string | null;
+  resume_file_size: number | null;
   application_status: ApplicationStatus;
   qualification_status: QualificationStatus | null;
   internal_score: number | null;
