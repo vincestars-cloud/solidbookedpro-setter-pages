@@ -27,7 +27,10 @@ The Supabase integration uses app-owned table names with the `sbp_setter_` prefi
    - `NEXT_PUBLIC_SETTER_BRIDGE_URL`: Optional override. Defaults to `<NEXT_PUBLIC_SUPABASE_URL>/rest/v1/rpc/sbp_setter_bridge`.
    - `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_API_TOKEN` for the protected dashboard/API.
 4. Configure each Vapi assistant server URL to `/api/vapi/webhook` when running on a server host. For static Pages, route Vapi webhooks to a server workflow that updates `sbp_setter_mock_calls`.
-5. Set the three public assistant IDs and public Vapi key.
+5. The Vapi public browser key and the three SolidBooked Pro mock-call assistant IDs are configured by default:
+   - Mock Call 1: `32a6bb38-0a56-40db-ab03-2540f820cc56`
+   - Mock Call 2: `bb12a1d4-47de-4c50-b3d5-eac9c79e4995`
+   - Mock Call 3: `93f168a7-40ba-4144-a8f7-217358b4aa0a`
 6. Set founder video, call recordings, and calendar embed URLs.
 
 ## Deployment note

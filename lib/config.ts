@@ -61,11 +61,11 @@ export const publicConfig: PublicConfig = {
     ]
   },
   vapi: {
-    publicKey: process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY || "",
+    publicKey: process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY || "66c11968-161c-4769-b85b-41ed0cf9c2b3",
     assistantIds: {
-      "1": process.env.NEXT_PUBLIC_VAPI_MOCK_CALL_1_ASSISTANT_ID || "",
-      "2": process.env.NEXT_PUBLIC_VAPI_MOCK_CALL_2_ASSISTANT_ID || "",
-      "3": process.env.NEXT_PUBLIC_VAPI_MOCK_CALL_3_ASSISTANT_ID || ""
+      "1": process.env.NEXT_PUBLIC_VAPI_MOCK_CALL_1_ASSISTANT_ID || "32a6bb38-0a56-40db-ab03-2540f820cc56",
+      "2": process.env.NEXT_PUBLIC_VAPI_MOCK_CALL_2_ASSISTANT_ID || "bb12a1d4-47de-4c50-b3d5-eac9c79e4995",
+      "3": process.env.NEXT_PUBLIC_VAPI_MOCK_CALL_3_ASSISTANT_ID || "93f168a7-40ba-4144-a8f7-217358b4aa0a"
     }
   },
   calendar: {
