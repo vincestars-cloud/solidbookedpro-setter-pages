@@ -210,6 +210,7 @@ declare
   file_size integer;
   file_base64 text;
   resume_row public.sbp_setter_resume_files%rowtype;
+  previous_hiring_stage text;
 begin
   if action = 'health' then
     return jsonb_build_object('ok', true, 'service', 'sbp_setter_bridge');
@@ -437,7 +438,7 @@ begin
     );
   end if;
 
-  if action in ('admin_list', 'admin_detail', 'admin_status', 'admin_note', 'admin_resume') then
+  if action in ('admin_list', 'admin_detail', 'admin_status', 'admin_note', 'admin_resume', 'vapi_report') then
     if coalesce(payload->>'token', '') <> admin_password then
       return jsonb_build_object('ok', false, 'message', 'Enter the admin password to view applicants.');
     end if;
@@ -498,6 +499,7 @@ begin
   if action = 'admin_status' then
     applicant_uuid := nullif(payload->>'id', '')::uuid;
     patch := coalesce(payload->'patch', '{}'::jsonb);
+    select hiring_stage_status into previous_hiring_stage from public.sbp_setter_applicants where id = applicant_uuid;
     update public.sbp_setter_applicants
     set
       qualification_status = case
@@ -525,7 +527,89 @@ begin
     returning * into applicant;
     insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
     values (applicant_uuid, 'admin_status_changed', patch);
+    if patch ? 'hiringStageStatus'
+      and nullif(patch->>'hiringStageStatus', '') = 'bad_fit'
+      and coalesce(previous_hiring_stage, '') <> 'bad_fit' then
+      insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
+      values (
+        applicant_uuid,
+        'rejection_email_requested',
+        jsonb_build_object(
+          'email', applicant.normalized_email,
+          'name', applicant.full_name,
+          'source', 'admin_bad_fit_status'
+        )
+      );
+    end if;
     return jsonb_build_object('ok', true, 'applicant', to_jsonb(applicant));
+  end if;
+
+  if action = 'vapi_report' then
+    applicant_uuid := nullif(coalesce(payload->>'applicantId', payload->>'applicant_id'), '')::uuid;
+    insert into public.sbp_setter_mock_calls (
+      applicant_id,
+      mock_call_number,
+      vapi_call_id,
+      status,
+      started_at,
+      ended_at,
+      duration_seconds,
+      ended_reason,
+      transcript,
+      recording_url,
+      summary,
+      structured_output,
+      backend_score,
+      raw_event_reference,
+      updated_at
+    )
+    values (
+      applicant_uuid,
+      nullif(coalesce(payload->>'mockCallNumber', payload->>'mock_call_number'), '')::integer,
+      nullif(coalesce(payload->>'vapiCallId', payload->>'vapi_call_id', payload->>'callId', payload->>'call_id'), ''),
+      coalesce(nullif(payload->>'status', ''), 'completed'),
+      nullif(coalesce(payload->>'startedAt', payload->>'started_at'), '')::timestamptz,
+      nullif(coalesce(payload->>'endedAt', payload->>'ended_at'), '')::timestamptz,
+      nullif(coalesce(payload->>'durationSeconds', payload->>'duration_seconds'), '')::numeric::integer,
+      nullif(coalesce(payload->>'endedReason', payload->>'ended_reason'), ''),
+      nullif(payload->>'transcript', ''),
+      nullif(coalesce(payload->>'recordingUrl', payload->>'recording_url'), ''),
+      nullif(payload->>'summary', ''),
+      coalesce(payload->'structuredOutput', payload->'structured_output', payload->'analysis', '{}'::jsonb),
+      nullif(coalesce(payload->>'backendScore', payload->>'backend_score'), '')::numeric::integer,
+      coalesce(payload->'rawEvent', payload->'raw_event', payload - 'token'),
+      now()
+    )
+    on conflict (applicant_id, mock_call_number)
+    do update set
+      vapi_call_id = coalesce(excluded.vapi_call_id, public.sbp_setter_mock_calls.vapi_call_id),
+      status = coalesce(excluded.status, public.sbp_setter_mock_calls.status),
+      started_at = coalesce(excluded.started_at, public.sbp_setter_mock_calls.started_at),
+      ended_at = coalesce(excluded.ended_at, public.sbp_setter_mock_calls.ended_at),
+      duration_seconds = coalesce(excluded.duration_seconds, public.sbp_setter_mock_calls.duration_seconds),
+      ended_reason = coalesce(excluded.ended_reason, public.sbp_setter_mock_calls.ended_reason),
+      transcript = coalesce(excluded.transcript, public.sbp_setter_mock_calls.transcript),
+      recording_url = coalesce(excluded.recording_url, public.sbp_setter_mock_calls.recording_url),
+      summary = coalesce(excluded.summary, public.sbp_setter_mock_calls.summary),
+      structured_output = case
+        when excluded.structured_output = '{}'::jsonb then public.sbp_setter_mock_calls.structured_output
+        else excluded.structured_output
+      end,
+      backend_score = coalesce(excluded.backend_score, public.sbp_setter_mock_calls.backend_score),
+      raw_event_reference = coalesce(excluded.raw_event_reference, public.sbp_setter_mock_calls.raw_event_reference),
+      updated_at = now();
+    insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
+    values (
+      applicant_uuid,
+      'vapi_end_of_call_report_saved',
+      jsonb_build_object(
+        'mockCallNumber', nullif(coalesce(payload->>'mockCallNumber', payload->>'mock_call_number'), '')::integer,
+        'vapiCallId', nullif(coalesce(payload->>'vapiCallId', payload->>'vapi_call_id', payload->>'callId', payload->>'call_id'), ''),
+        'hasTranscript', coalesce(payload->>'transcript', '') <> '',
+        'hasRecordingUrl', coalesce(payload->>'recordingUrl', payload->>'recording_url', '') <> ''
+      )
+    );
+    return jsonb_build_object('ok', true);
   end if;
 
   if action = 'admin_note' then

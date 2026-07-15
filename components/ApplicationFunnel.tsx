@@ -719,19 +719,19 @@ export function ApplicationFunnel({ config }: Props) {
                   </details>
                   <details>
                     <summary>What tools will I use?</summary>
-                    <p>You should expect to use a CRM, a browser-based dialer, and Hubstaff. The exact setup and login process are covered during onboarding.</p>
+                    <p>You will be using our CRM and dialer. We use Hubstaff for time tracking and pay. Hubstaff supports paying you via Wise, PayPal, Payoneer and several other payment providers.</p>
                   </details>
                   <details>
                     <summary>Do I work weekends?</summary>
-                    <p>The standard schedule and any optional weekend needs will be confirmed during the interview.</p>
+                    <p>Normal work days are Monday to Friday. Weekends are optional if you choose to work those days as well.</p>
+                  </details>
+                  <details>
+                    <summary>What are the working hours?</summary>
+                    <p>The role operates during U.S. Eastern Time. Enter your exact availability in the application so we can verify that it overlaps with the required calling window.</p>
                   </details>
                   <details>
                     <summary>Do I close the sale or collect payment?</summary>
                     <p>No. Your job is to build rapport, answer approved general questions, send the correct details, and book a qualified presentation. The owner handles the complete presentation and payment.</p>
-                  </details>
-                  <details>
-                    <summary>What does your first day look like?</summary>
-                    <p>Your first day is a paid training and evaluation day: practice round, 45 minutes of live calls, coaching, another live-call round, then a same-day decision. You get paid the same day for all 2 hours of work, even if we decide not to move forward.</p>
                   </details>
                   <details>
                     <summary>What should I have ready before starting?</summary>

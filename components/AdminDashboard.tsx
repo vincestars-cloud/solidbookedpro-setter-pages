@@ -11,11 +11,9 @@ const fitStatuses = [
   { value: "", label: "No fit status" },
   { value: "a_player", label: "A-Player" },
   { value: "b_player", label: "B-Player" },
-  { value: "good_fit", label: "Good Fit" },
-  { value: "maybe", label: "Maybe" },
-  { value: "bad_fit", label: "Bad Fit" },
-  { value: "do_not_contact", label: "Do Not Contact" }
+  { value: "bad_fit", label: "Bad Fit" }
 ];
+const pageSize = 25;
 const applicationStatuses = ["started", "step_1_complete", "step_2_complete", "step_3_complete", "mock_calls_in_progress", "application_completed", "interview_scheduled", "interview_completed", "paid_trial", "hired", "rejected", "withdrawn"];
 const qualificationStatuses = ["qualified", "manual_review", "not_qualified"];
 const interviewStatuses = ["not_scheduled", "scheduled", "completed"];
@@ -89,7 +87,8 @@ export function AdminDashboard() {
   const [selected, setSelected] = useState<Bundle | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [sort, setSort] = useState("newest");
+  const [sort, setSort] = useState("fit");
+  const [page, setPage] = useState(1);
   const [note, setNote] = useState("");
   const [loadMessage, setLoadMessage] = useState("");
   const [resumeMessage, setResumeMessage] = useState("");
@@ -122,14 +121,27 @@ export function AdminDashboard() {
       return (!q || haystack.includes(q)) && (!status || a.application_status === status || a.qualification_status === status || a.interview_status === status || a.hiring_stage_status === status);
     });
     list.sort((a, b) => {
+      if (sort === "fit") {
+        const fitRank = getFitStatusRank(a.hiring_stage_status) - getFitStatusRank(b.hiring_stage_status);
+        if (fitRank !== 0) return fitRank;
+        return getSortTime(b) - getSortTime(a);
+      }
       if (sort === "oldest") return new Date(a.started_at).getTime() - new Date(b.started_at).getTime();
       if (sort === "pay") return Number(b.desired_hourly_pay || 0) - Number(a.desired_hourly_pay || 0);
       if (sort === "score") return getApplicantScore(b) - getApplicantScore(a);
       if (sort === "qualified") return String(a.qualification_status).localeCompare(String(b.qualification_status));
-      return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
+      return getSortTime(b) - getSortTime(a);
     });
     return list;
   }, [applicants, search, status, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedApplicants = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, status, sort, applicants.length]);
 
   const stats = useMemo(() => {
     const completed = applicants.filter((a) => a.application_status === "application_completed").length;
@@ -390,6 +402,7 @@ export function AdminDashboard() {
             {[...applicationStatuses, ...qualificationStatuses, ...interviewStatuses, ...fitStatuses.map((item) => item.value).filter(Boolean)].map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
           </select>
           <select className="control" value={sort} onChange={(event) => setSort(event.target.value)}>
+            <option value="fit">Fit status, then newest</option>
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="score">Highest AI score</option>
@@ -402,45 +415,52 @@ export function AdminDashboard() {
           <table>
             <thead>
               <tr>
+                <th>Review</th>
                 <th>Name</th>
                 <th>Email</th>
                 <th>Desired pay</th>
-                <th>Availability</th>
-                <th>Start date</th>
-                <th>Experience summary</th>
-                <th>Status</th>
-                <th>Qualification</th>
                 <th>Fit status</th>
+                <th>Interview status</th>
+                <th>Start date</th>
+                <th>Availability</th>
                 <th>AI score</th>
                 <th>Mock calls</th>
-                <th>Interview</th>
-                <th>Submitted</th>
-                <th></th>
+                <th>Vocaroo link</th>
+                <th>Appointment setting experience</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((applicant) => (
-                <tr key={applicant.id}>
+              {paginatedApplicants.map((applicant) => (
+                <tr key={applicant.id} className={getFitRowClass(applicant.hiring_stage_status)}>
+                  <td><button className="btn btn-secondary btn-small" onClick={() => openApplicant(applicant.id)}>Review</button></td>
                   <td><strong>{applicant.full_name || "Unnamed"}</strong><br /><span className="media-meta">{applicant.preferred_name || ""}</span></td>
                   <td>{applicant.normalized_email}</td>
                   <td>{applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""}</td>
-                  <td>{applicant.availability_est ? `${applicant.availability_est.start}-${applicant.availability_est.end} ET` : ""}</td>
-                  <td>{applicant.earliest_start_date || ""}</td>
-                  <td>{truncate(applicant.appointment_setting_experience || applicant.past_metrics || "", 110)}</td>
-                  <td><span className="pill">{applicant.application_status}</span></td>
-                  <td><span className="pill">{applicant.qualification_status || "pending"}</span></td>
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
+                  <td>{formatStatusLabel(applicant.interview_status || "not_scheduled")}</td>
+                  <td>{formatDate(applicant.earliest_start_date)}</td>
+                  <td>{applicant.availability_est ? `${applicant.availability_est.start}-${applicant.availability_est.end} ET` : ""}</td>
                   <td>{formatScore(getApplicantScore(applicant))}</td>
                   <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
-                  <td>{applicant.interview_status}</td>
-                  <td>{applicant.submitted_at ? new Date(applicant.submitted_at).toLocaleString() : ""}</td>
-                  <td><button className="btn btn-secondary btn-small" onClick={() => openApplicant(applicant.id)}>Review</button></td>
+                  <td>{applicant.vocaroo_url ? <a className="table-link" href={applicant.vocaroo_url} target="_blank" rel="noreferrer">Open link</a> : ""}</td>
+                  <td>{truncate(applicant.appointment_setting_experience || "", 140)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           {!filtered.length && <div className="admin-table-empty">No applicants found yet. Enter the admin password, refresh, or complete a test submission from the application.</div>}
         </div>
+
+        {filtered.length > pageSize && (
+          <div className="admin-pagination" aria-label="Applicant table pagination">
+            <span>Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length}</span>
+            <div>
+              <button className="btn btn-secondary btn-small" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</button>
+              <span>Page {currentPage} of {totalPages}</span>
+              <button className="btn btn-secondary btn-small" disabled={currentPage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Next</button>
+            </div>
+          </div>
+        )}
 
         {selected && (
           <section className="admin-detail-grid">
@@ -947,6 +967,27 @@ function getApplicantScore(applicant: ApplicantRecord) {
   return Number(withAggregates.mock_average_score || withAggregates.mockAverageScore || applicant.internal_score || 0);
 }
 
+function getFitStatusRank(value?: string | null) {
+  if (value === "a_player") return 0;
+  if (value === "b_player") return 1;
+  if (value === "bad_fit") return 2;
+  if (!value) return 3;
+  return 4;
+}
+
+function getFitRowClass(value?: string | null) {
+  if (value === "a_player") return "fit-row-a-player";
+  if (value === "b_player") return "fit-row-b-player";
+  if (value === "bad_fit") return "fit-row-bad-fit";
+  return "";
+}
+
+function getSortTime(applicant: ApplicantRecord) {
+  const value = applicant.submitted_at || applicant.started_at || applicant.created_at || applicant.updated_at;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 function getCallScore(call: MockCallRecord) {
   const structured = getStructuredOutput(call);
   return Number(
@@ -1091,7 +1132,7 @@ function formatDate(value?: string | null) {
   if (!value) return "";
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString();
+  return parsed.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
 }
 
 function formatDateTime(value?: string | null) {
