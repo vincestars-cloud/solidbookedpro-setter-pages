@@ -48,16 +48,32 @@ function getPath(source, path) {
 
 function transcriptFromMessages(messages) {
   if (!Array.isArray(messages)) return '';
-  return messages
-    .map((message) => {
-      const text = message.message || message.content || message.text || '';
-      if (!text || typeof text !== 'string') return '';
-      const role = String(message.role || message.type || '').toLowerCase();
-      const label = role.includes('assistant') || role.includes('bot') ? 'Prospect' : role.includes('user') ? 'Applicant' : 'Speaker';
-      return label + ': ' + text;
-    })
-    .filter(Boolean)
-    .join('\\n');
+  const lines = [];
+  for (const message of messages) {
+    const role = String(message.role || message.type || '').toLowerCase();
+    if (!['assistant', 'bot', 'ai', 'user', 'customer'].includes(role)) continue;
+    const text = message.message || message.content || message.text || message.transcript || '';
+    if (!text || typeof text !== 'string') continue;
+    if (/you are role playing|evaluate through conversation|rules:|company context:|starting point:/i.test(text)) continue;
+    const label = role === 'user' || role === 'customer' ? 'Applicant' : 'Prospect';
+    lines.push(label + ': ' + text.trim());
+  }
+  return lines.join('\\n');
+}
+
+function cleanTranscript(value) {
+  if (!value || typeof value !== 'string') return '';
+  if (/you are role playing|evaluate through conversation|rules:|company context:|starting point:/i.test(value)) return '';
+  return value
+    .replace(/\\bAI:/g, 'Prospect:')
+    .replace(/\\bAssistant:/g, 'Prospect:')
+    .replace(/\\bUser:/g, 'Applicant:')
+    .replace(/\\bCustomer:/g, 'Applicant:')
+    .trim();
+}
+
+function hasApplicantSpeech(transcript) {
+  return /(^|\\n)\\s*Applicant\\s*:/i.test(transcript || '');
 }
 
 function safeJson(value) {
@@ -126,12 +142,14 @@ const mockCallNumber = Number(
 );
 
 const transcript = firstString([
-  message.artifact?.transcript,
-  payload.transcript,
-  callDetail.transcript,
-  callDetail.artifact?.transcript,
   transcriptFromMessages(message.artifact?.messages),
-  transcriptFromMessages(callDetail.messages)
+  transcriptFromMessages(callDetail.artifact?.messages),
+  transcriptFromMessages(message.messages),
+  transcriptFromMessages(callDetail.messages),
+  cleanTranscript(message.artifact?.transcript),
+  cleanTranscript(payload.transcript),
+  cleanTranscript(callDetail.artifact?.transcript),
+  cleanTranscript(callDetail.transcript)
 ]);
 const recordingUrl = firstString([
   message.artifact?.recording?.url,
@@ -146,12 +164,12 @@ const startedAt = firstString([payload.startedAt, payload.started_at, payloadCal
 const endedAt = firstString([payload.endedAt, payload.ended_at, payloadCall.endedAt, callDetail.endedAt]);
 const endedReason = firstString([payload.endedReason, payload.ended_reason, message.endedReason, payloadCall.endedReason, callDetail.endedReason]);
 const duration = durationSeconds(startedAt, endedAt, payload.durationSeconds || payload.duration_seconds || callDetail.durationSeconds || callDetail.duration);
-let summary = firstString([payload.summary, message.summary, message.analysis?.summary, callDetail.summary, callDetail.analysis?.summary]);
-let structuredOutput = payload.structuredOutput || payload.structured_output || message.analysis?.structuredData || callDetail.analysis?.structuredData || callDetail.analysis || {};
-let backendScore = payload.backendScore || payload.backend_score || null;
+let summary = '';
+let structuredOutput = {};
+let backendScore = null;
 let aiReview = null;
 
-if (transcript) {
+if (transcript && hasApplicantSpeech(transcript)) {
   const prompt = {
     model: 'gpt-4o-mini',
     temperature: 0.1,
@@ -235,6 +253,22 @@ if (transcript) {
       objection_moments: []
     }
   };
+} else {
+  backendScore = 0;
+  structuredOutput = {
+    overall_score: 0,
+    ai_review: {
+      overall_score: 0,
+      recommendation: 'poor_fit',
+      summary: transcript
+        ? 'The call did not include a captured applicant response, so there was no usable applicant behavior to evaluate.'
+        : 'No usable transcript was available from Vapi for this call.',
+      strengths: [],
+      concerns: [transcript ? 'No applicant speech captured in transcript.' : 'No usable transcript received from Vapi.'],
+      objection_moments: []
+    }
+  };
+  summary = structuredOutput.ai_review.summary;
 }
 
 if (!applicantId || !mockCallNumber || !vapiCallId) {
@@ -380,7 +414,11 @@ for (const id of assistantIds) {
     method: "PATCH",
     body: JSON.stringify({
       serverUrl: webhookUrl,
-      serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"]
+      serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
+      analysisPlan: {
+        summaryPlan: { enabled: false },
+        structuredDataPlan: { enabled: false }
+      }
     })
   });
   assistantResults.push({ id, name: updated.name, serverUrl: updated.serverUrl, serverMessages: updated.serverMessages });
