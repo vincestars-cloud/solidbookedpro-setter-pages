@@ -851,19 +851,19 @@ export function ApplicationFunnel({ config }: Props) {
                               {
                                 role: "Website Appt Setter",
                                 note: "Where you start",
-                                pay: "Hourly + $20 per Qualified Appointment",
+                                pay: "$5-8hr + $20 per Qualified Appointment",
                                 earning: "Minimum Earning: $2,100 USD per month"
                               },
                               {
                                 role: "Lead Service Setter",
                                 note: "",
-                                pay: "Hourly + $100 per Qualified Appointment",
+                                pay: "$5-10hr + $100 per Qualified Appointment",
                                 earning: "Minimum Earning: $6,600 USD per month"
                               },
                               {
                                 role: "Lead Service Closer",
                                 note: "",
-                                pay: "Hourly + $250 per Sale",
+                                pay: "$10-16hr + $250 per Sale",
                                 earning: "Minimum Earning: $12,800 USD per month"
                               }
                             ].map((item, index) => (

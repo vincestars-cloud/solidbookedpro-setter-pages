@@ -510,6 +510,14 @@ begin
         when patch ? 'applicationStatus' then patch->>'applicationStatus'
         else application_status
       end,
+      interview_status = case
+        when patch ? 'interviewStatus' then patch->>'interviewStatus'
+        else interview_status
+      end,
+      hiring_stage_status = case
+        when patch ? 'hiringStageStatus' then nullif(patch->>'hiringStageStatus', '')
+        else hiring_stage_status
+      end,
       reopened_at = case when coalesce((patch->>'reopen')::boolean, false) then now() else reopened_at end,
       submitted_at = case when coalesce((patch->>'reopen')::boolean, false) then null else submitted_at end,
       updated_at = now()

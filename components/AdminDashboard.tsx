@@ -6,6 +6,19 @@ import type { ApplicantRecord, MediaEngagementInput } from "@/lib/types";
 
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 const bridgeMode = staticPagesMode && Boolean(setterBridgeUrl);
+const adminTokenStorageKey = "sbp_admin_token";
+const fitStatuses = [
+  { value: "", label: "No fit status" },
+  { value: "a_player", label: "A-Player" },
+  { value: "b_player", label: "B-Player" },
+  { value: "good_fit", label: "Good Fit" },
+  { value: "maybe", label: "Maybe" },
+  { value: "bad_fit", label: "Bad Fit" },
+  { value: "do_not_contact", label: "Do Not Contact" }
+];
+const applicationStatuses = ["started", "step_1_complete", "step_2_complete", "step_3_complete", "mock_calls_in_progress", "application_completed", "interview_scheduled", "interview_completed", "paid_trial", "hired", "rejected", "withdrawn"];
+const qualificationStatuses = ["qualified", "manual_review", "not_qualified"];
+const interviewStatuses = ["not_scheduled", "scheduled", "completed"];
 
 type StaticSubmission = {
   applicantId: string;
@@ -78,9 +91,11 @@ export function AdminDashboard() {
   const [resumeMessage, setResumeMessage] = useState("");
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("sbp_admin_token") || "";
+    const saved = localStorage.getItem(adminTokenStorageKey) || sessionStorage.getItem(adminTokenStorageKey) || "";
     setToken(saved);
-    if (staticPagesMode || saved) loadApplicants(saved);
+    if (saved) loadApplicants(saved);
+    else if (bridgeMode) setLoadMessage("Enter the admin password once. This browser will remember it for future dashboard visits.");
+    else if (staticPagesMode) loadStaticApplicants();
   }, []);
 
   const filtered = useMemo(() => {
@@ -92,6 +107,7 @@ export function AdminDashboard() {
         a.normalized_email,
         a.application_status,
         a.qualification_status,
+        a.hiring_stage_status,
         a.crm_platforms,
         a.appointment_setting_experience,
         a.industries,
@@ -99,7 +115,7 @@ export function AdminDashboard() {
       ]
         .join(" ")
         .toLowerCase();
-      return (!q || haystack.includes(q)) && (!status || a.application_status === status || a.qualification_status === status || a.interview_status === status);
+      return (!q || haystack.includes(q)) && (!status || a.application_status === status || a.qualification_status === status || a.interview_status === status || a.hiring_stage_status === status);
     });
     list.sort((a, b) => {
       if (sort === "oldest") return new Date(a.started_at).getTime() - new Date(b.started_at).getTime();
@@ -122,10 +138,13 @@ export function AdminDashboard() {
   }, [applicants]);
 
   async function loadApplicants(authToken = token) {
-    sessionStorage.setItem("sbp_admin_token", authToken);
     if (bridgeMode) {
       try {
         const body = await setterBridgeRequest<{ applicants: ApplicantRecord[] }>("admin_list", { token: authToken });
+        if (authToken) {
+          localStorage.setItem(adminTokenStorageKey, authToken);
+          sessionStorage.setItem(adminTokenStorageKey, authToken);
+        }
         setApplicants(body.applicants || []);
         setLoadMessage("Showing Supabase submissions through the SolidBooked Pro bridge.");
         if (selected && !body.applicants?.some((applicant) => applicant.id === selected.applicant.id)) setSelected(null);
@@ -133,6 +152,7 @@ export function AdminDashboard() {
       } catch (error) {
         setApplicants([]);
         setSelected(null);
+        if (authToken) localStorage.removeItem(adminTokenStorageKey);
         setLoadMessage(error instanceof Error ? error.message : "Admin bridge is unavailable.");
         return;
       }
@@ -144,6 +164,10 @@ export function AdminDashboard() {
     try {
       const response = await fetch("/api/admin/applicants", { headers: { "x-admin-token": authToken } });
       if (!response.ok) throw new Error("Admin API unavailable.");
+      if (authToken) {
+        localStorage.setItem(adminTokenStorageKey, authToken);
+        sessionStorage.setItem(adminTokenStorageKey, authToken);
+      }
       setApplicants((await response.json()).applicants || []);
       setLoadMessage("");
     } catch {
@@ -217,6 +241,8 @@ export function AdminDashboard() {
         const statusOverride = { ...(item.statusOverride || {}) };
         if (patch.qualificationStatus) statusOverride.qualification_status = patch.qualificationStatus as any;
         if (patch.applicationStatus) statusOverride.application_status = patch.applicationStatus as any;
+        if (patch.interviewStatus) statusOverride.interview_status = patch.interviewStatus as any;
+        if (patch.hiringStageStatus !== undefined) statusOverride.hiring_stage_status = patch.hiringStageStatus as any;
         if (patch.reopen) {
           statusOverride.application_status = "started";
           statusOverride.qualification_status = "manual_review";
@@ -328,8 +354,16 @@ export function AdminDashboard() {
             <p>Review submissions, call activity, scenario answers, status changes, and notes from one place.</p>
           </div>
           <div className="admin-actions">
-            {(!staticPagesMode || bridgeMode) && <input className="control" placeholder="Admin password" value={token} onChange={(event) => setToken(event.target.value)} />}
+            {(!staticPagesMode || bridgeMode) && <input className="control" type="password" placeholder={token ? "Admin password saved" : "Admin password"} value={token} onChange={(event) => setToken(event.target.value)} />}
             <button className="btn btn-primary" onClick={() => loadApplicants()}>Refresh applicants</button>
+            {token && <button className="btn btn-secondary" onClick={() => {
+              localStorage.removeItem(adminTokenStorageKey);
+              sessionStorage.removeItem(adminTokenStorageKey);
+              setToken("");
+              setApplicants([]);
+              setSelected(null);
+              setLoadMessage("Admin password cleared from this browser.");
+            }}>Forget login</button>}
             <button className="btn btn-secondary" onClick={() => staticPagesMode ? exportStatic("csv") : window.location.assign("/api/admin/export?format=csv")}>CSV export</button>
             <button className="btn btn-secondary" onClick={() => staticPagesMode ? exportStatic("json") : window.location.assign("/api/admin/export?format=json")}>JSON export</button>
           </div>
@@ -349,7 +383,7 @@ export function AdminDashboard() {
           <input className="control" placeholder="Search name, email, platform, experience, metrics" value={search} onChange={(event) => setSearch(event.target.value)} />
           <select className="control" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">All statuses</option>
-            {["started", "application_completed", "qualified", "manual_review", "not_qualified", "interview_scheduled", "scheduled", "hired", "rejected", "withdrawn"].map((item) => <option key={item} value={item}>{item}</option>)}
+            {[...applicationStatuses, ...qualificationStatuses, ...interviewStatuses, ...fitStatuses.map((item) => item.value).filter(Boolean)].map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
           </select>
           <select className="control" value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="newest">Newest</option>
@@ -372,6 +406,7 @@ export function AdminDashboard() {
                 <th>Experience summary</th>
                 <th>Status</th>
                 <th>Qualification</th>
+                <th>Fit status</th>
                 <th>AI score</th>
                 <th>Mock calls</th>
                 <th>Interview</th>
@@ -390,6 +425,7 @@ export function AdminDashboard() {
                   <td>{truncate(applicant.appointment_setting_experience || applicant.past_metrics || "", 110)}</td>
                   <td><span className="pill">{applicant.application_status}</span></td>
                   <td><span className="pill">{applicant.qualification_status || "pending"}</span></td>
+                  <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
                   <td>{formatScore(getApplicantScore(applicant))}</td>
                   <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
                   <td>{applicant.interview_status}</td>
@@ -419,6 +455,32 @@ export function AdminDashboard() {
                   <button className="btn btn-secondary" onClick={() => updateStatus({ qualificationStatus: "not_qualified" })}>Disqualify</button>
                   <button className="btn btn-secondary" onClick={() => updateStatus({ reopen: true })}>Reopen</button>
                 </div>
+                <section className="admin-status-panel" aria-label="Applicant status controls">
+                  <label>
+                    <span>Fit status</span>
+                    <select className="control" value={selected.applicant.hiring_stage_status || ""} onChange={(event) => updateStatus({ hiringStageStatus: event.target.value || null })}>
+                      {fitStatuses.map((item) => <option key={item.value || "none"} value={item.value}>{item.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Application status</span>
+                    <select className="control" value={selected.applicant.application_status || "started"} onChange={(event) => updateStatus({ applicationStatus: event.target.value })}>
+                      {applicationStatuses.map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Qualification</span>
+                    <select className="control" value={selected.applicant.qualification_status || "manual_review"} onChange={(event) => updateStatus({ qualificationStatus: event.target.value })}>
+                      {qualificationStatuses.map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Interview</span>
+                    <select className="control" value={selected.applicant.interview_status || "not_scheduled"} onChange={(event) => updateStatus({ interviewStatus: event.target.value })}>
+                      {interviewStatuses.map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
+                    </select>
+                  </label>
+                </section>
                 <div className="admin-answer-grid">
                   <Answer label="Preferred name" value={selected.applicant.preferred_name} />
                   <Answer label="Desired pay" value={selected.applicant.desired_hourly_pay ? `$${selected.applicant.desired_hourly_pay}/hr` : ""} />
@@ -439,6 +501,7 @@ export function AdminDashboard() {
                   <textarea className="control" id="note" value={note} onChange={(event) => setNote(event.target.value)} />
                   <button className="btn btn-primary" onClick={addNote}>Add note</button>
                 </div>
+                <NoteList notes={selected.notes} />
               </div>
             </aside>
 
@@ -610,6 +673,25 @@ function ResumeAnswer({
       )}
       {message && <small>{message}</small>}
     </div>
+  );
+}
+
+function NoteList({ notes }: { notes: Array<Record<string, unknown>> }) {
+  if (!notes.length) {
+    return <div className="notes-panel empty-notes">No internal notes yet.</div>;
+  }
+  return (
+    <section className="notes-panel" aria-label="Saved internal notes">
+      <h3>Saved notes</h3>
+      <div className="notes-list">
+        {notes.map((item, index) => (
+          <article className="note-card" key={String(item.id || index)}>
+            <p>{String(item.note || "")}</p>
+            <span>{item.created_at ? new Date(String(item.created_at)).toLocaleString() : item.createdAt ? new Date(String(item.createdAt)).toLocaleString() : ""}</span>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -806,8 +888,18 @@ function formatScore(score: number) {
   return score ? `${Math.round(score)}/100` : "";
 }
 
+function formatStatusLabel(value: string) {
+  if (!value || value === "none") return "None";
+  return value
+    .split("_")
+    .map((part) => (part.length === 1 ? part.toUpperCase() : `${part.charAt(0).toUpperCase()}${part.slice(1)}`))
+    .join(" ")
+    .replace("A Player", "A-Player")
+    .replace("B Player", "B-Player");
+}
+
 function toCsv(applicants: ApplicantRecord[]) {
-  const headers = ["Name", "Preferred name", "Email", "Desired pay", "Availability", "Start date", "Experience", "Status", "Qualification", "Interview", "Submitted"];
+  const headers = ["Name", "Preferred name", "Email", "Desired pay", "Availability", "Start date", "Experience", "Status", "Qualification", "Fit status", "Interview", "Submitted"];
   const rows = applicants.map((a) => [
     a.full_name || "",
     a.preferred_name || "",
@@ -818,6 +910,7 @@ function toCsv(applicants: ApplicantRecord[]) {
     a.appointment_setting_experience || "",
     a.application_status,
     a.qualification_status || "",
+    formatStatusLabel(a.hiring_stage_status || ""),
     a.interview_status,
     a.submitted_at || ""
   ]);
