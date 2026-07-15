@@ -596,12 +596,28 @@ export function ApplicationFunnel({ config }: Props) {
                     <p>You will contact warm and cold business owners, build rapport, answer general questions, update the CRM, and book qualified appointments for the owner or closer.</p>
                   </details>
                   <details>
-                    <summary>What kind of prospects will I call?</summary>
+                    <summary>Is this cold calling?</summary>
                     <p>About 40% are warm prospects who already raised their hand. About 60% are cold prospects we identified as likely needing help getting more customers.</p>
                   </details>
                   <details>
-                    <summary>How is the role paid?</summary>
-                    <p>The path starts with Website Appt Setter at hourly pay plus $20 per qualified appointment, then Lead Service Setter at hourly pay plus $100 per qualified appointment, then Lead Service Closer at hourly pay plus $250 per sale.</p>
+                    <summary>What kind of prospects will I call?</summary>
+                    <p>You will speak with business owners who have received a message from us. Some conversations begin from expressed interest; others may require you to create interest and explain why you are calling.</p>
+                  </details>
+                  <details>
+                    <summary>What does training look like?</summary>
+                    <p>Training includes a paid role-play session, live-call coaching, and hands-on use of the CRM, dialer, and time-tracking tools.</p>
+                  </details>
+                  <details>
+                    <summary>What tools will I use?</summary>
+                    <p>You should expect to use a CRM, a browser-based dialer, and Hubstaff. The exact setup and login process are covered during onboarding.</p>
+                  </details>
+                  <details>
+                    <summary>Do I work weekends?</summary>
+                    <p>The standard schedule and any optional weekend needs will be confirmed during the interview.</p>
+                  </details>
+                  <details>
+                    <summary>Do I close the sale or collect payment?</summary>
+                    <p>No. Your job is to build rapport, answer approved general questions, send the correct details, and book a qualified presentation. The owner handles the complete presentation and payment.</p>
                   </details>
                   <details>
                     <summary>What should I have ready before starting?</summary>
@@ -662,14 +678,14 @@ export function ApplicationFunnel({ config }: Props) {
                           {renderError("availableEnd")}
                         </div>
                         <Field id="vocarooUrl" label="Vocaroo recording URL" type="url" value={fields.vocarooUrl} onChange={(v) => updateField("vocarooUrl", v)} error={renderError("vocarooUrl")} helper="Paste your voice-recording link." />
-                        <ResumeUpload fileName={fields.resumeFileName || ""} fileSize={fields.resumeFileSize || 0} onChange={(file) => {
-                          updateField("resumeFileName", (file?.name || "") as any);
-                          updateField("resumeFileSize", (file?.size || 0) as any);
-                        }} />
                         <Textarea id="crmPlatforms" label="What CRM or scheduling platforms have you used?" value={fields.crmPlatforms} onChange={(v) => updateField("crmPlatforms", v)} error={renderError("crmPlatforms")} full={false} compact />
                         <Textarea id="appointmentSettingExperience" label="What appointment-setting or cold-calling experience have you had?" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} full={false} compact />
                         <Textarea id="industries" label="What industries or offers have you worked with?" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} full={false} compact />
                         <Textarea id="pastMetrics" label="What are some of the past metrics that you had?" value={fields.pastMetrics} onChange={(v) => updateField("pastMetrics", v)} error={renderError("pastMetrics")} helper="Include specific numbers when possible, such as calls made, conversations, appointments booked, show rate, close rate, or quota performance." />
+                        <ResumeUpload fileName={fields.resumeFileName || ""} fileSize={fields.resumeFileSize || 0} onChange={(file) => {
+                          updateField("resumeFileName", (file?.name || "") as any);
+                          updateField("resumeFileSize", (file?.size || 0) as any);
+                        }} />
                       </div>
                       {duplicateMessage && <p className="notice" role="alert">{duplicateMessage}</p>}
                       <div className="actions"><span /><button className="btn btn-primary" onClick={() => goToStep(2)}>Continue</button></div>
@@ -769,7 +785,6 @@ export function ApplicationFunnel({ config }: Props) {
                               const audio = event.currentTarget;
                               updateLibrary(index, { secondsConsumed: Math.round(audio.currentTime), percentageConsumed: audio.duration ? Math.max(callLibrary[index].percentageConsumed, Math.round((audio.currentTime / audio.duration) * 100)) : 0 });
                             }} onEnded={() => updateLibrary(index, { completed: true, percentageConsumed: 100 })} /> : <div className="notice">Audio player slot ready. Add URL in configuration.</div>}
-                            <p className="media-meta">{callLibrary[index].percentageConsumed}% listened</p>
                           </article>
                         ))}
                       </div>
