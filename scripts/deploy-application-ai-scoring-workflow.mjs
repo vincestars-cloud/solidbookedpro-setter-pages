@@ -54,6 +54,22 @@ function extractResponseText(response) {
   return pieces.join('\\n').trim();
 }
 
+function daysUntil(dateValue, currentDateValue) {
+  if (!dateValue) return null;
+  const start = new Date(String(dateValue) + 'T00:00:00Z').getTime();
+  const current = new Date(String(currentDateValue) + 'T00:00:00Z').getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(current)) return null;
+  return Math.round((start - current) / 86400000);
+}
+
+function removeStartDateFalsePositive(value, startDateIsAcceptable) {
+  if (!startDateIsAcceptable) return value;
+  const pattern = /(start date|availability starts|desired start|earliest start|2026|future|delayed|unrealistic)/i;
+  if (Array.isArray(value)) return value.filter((item) => !pattern.test(String(item || '')));
+  if (typeof value === 'string' && pattern.test(value)) return '';
+  return value;
+}
+
 async function bridge(action, payload) {
   const response = await helpers.httpRequest({
     method: 'POST',
@@ -134,9 +150,19 @@ if (resumeTextForScoring.length < 100 && resume.fileBase64) {
   }
 }
 
+const currentDate = new Date().toISOString().slice(0, 10);
+const daysToStart = daysUntil(applicant.earliest_start_date, currentDate);
+const startDateIsAcceptable = daysToStart !== null && daysToStart >= 0 && daysToStart <= 14;
+
 const packet = {
   applicant_id: applicantId,
   role: 'Remote appointment setter for SolidBooked Pro, calling warm and cold business owners during U.S. Eastern hours.',
+  review_context: {
+    current_date: currentDate,
+    days_until_earliest_start_date: daysToStart,
+    earliest_start_date_is_acceptable: startDateIsAcceptable,
+    start_date_rule: 'Do not penalize a future earliest_start_date merely because it is in 2026. The current date is included above. A start date within 0-14 days is acceptable, 15-30 days is mild concern, and more than 30 days is a material concern.'
+  },
   application: {
     full_name: applicant.full_name,
     preferred_name: applicant.preferred_name,
@@ -182,7 +208,7 @@ const openAiResponse = await helpers.httpRequest({
     messages: [
       {
         role: 'system',
-        content: 'You are a strict hiring evaluator for a remote appointment setter role, using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical outbound B2B appointment setting. Score only the application and resume packet, not mock-call transcripts. Reward evidence of real outbound reps: cold/warm calling, staying in uncomfortable objection moments, follow-up discipline, CRM/dialer use, measurable appointment production, show-rate awareness, phone stamina, coachability, and clear truthful communication. Do not over-reward polished resume language without numbers or proof. Penalize vague answers, no measurable proof, customer-service-only experience, job hopping without context, inflated claims, weak availability/pay mismatch, and obvious contradictions. Return only valid JSON.'
+        content: 'You are a strict hiring evaluator for a remote appointment setter role, using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical outbound B2B appointment setting. Score only the application and resume packet, not mock-call transcripts. Reward evidence of real outbound reps: cold/warm calling, staying in uncomfortable objection moments, follow-up discipline, CRM/dialer use, measurable appointment production, show-rate awareness, phone stamina, coachability, and clear truthful communication. Do not over-reward polished resume language without numbers or proof. Penalize vague answers, no measurable proof, customer-service-only experience, job hopping without context, inflated claims, weak availability/pay mismatch, and obvious contradictions. Date context matters: use the provided current_date and days_until_earliest_start_date. If earliest_start_date_is_acceptable is true, do not list start date as a concern or risk flag. Return only valid JSON.'
       },
       {
         role: 'user',
@@ -237,19 +263,28 @@ const openAiResponse = await helpers.httpRequest({
 const ai = safeJson(openAiResponse?.choices?.[0]?.message?.content);
 if (!ai) throw new Error('OpenAI application scoring did not return valid JSON.');
 
+if (startDateIsAcceptable) {
+  ai.concerns = removeStartDateFalsePositive(ai.concerns, true);
+  ai.risk_flags = removeStartDateFalsePositive(ai.risk_flags || ai.riskFlags, true);
+  if (Array.isArray(ai.risk_flags)) ai.riskFlags = ai.risk_flags;
+}
+
 const breakdown = ai.score_breakdown || ai.scoreBreakdown || {};
+const scoreBreakdown = {
+  resume: clamp(breakdown.resume, 0, 10),
+  appointment_setting_experience: clamp(breakdown.appointment_setting_experience, 0, 20),
+  past_metrics: clamp(breakdown.past_metrics, 0, 20),
+  crm_tools: clamp(breakdown.crm_tools, 0, 8),
+  industries_fit: clamp(breakdown.industries_fit, 0, 7),
+  reliability_clarity: clamp(breakdown.reliability_clarity, 0, 5)
+};
 const applicationScore = clamp(
-  ai.application_score_70 ??
-    ai.applicationScore70 ??
-    ai.application_score ??
-    (
-      Number(breakdown.resume || 0) +
-      Number(breakdown.appointment_setting_experience || 0) +
-      Number(breakdown.past_metrics || 0) +
-      Number(breakdown.crm_tools || 0) +
-      Number(breakdown.industries_fit || 0) +
-      Number(breakdown.reliability_clarity || 0)
-    ),
+  scoreBreakdown.resume +
+    scoreBreakdown.appointment_setting_experience +
+    scoreBreakdown.past_metrics +
+    scoreBreakdown.crm_tools +
+    scoreBreakdown.industries_fit +
+    scoreBreakdown.reliability_clarity,
   0,
   70
 );
@@ -258,6 +293,7 @@ const analysis = {
   ...ai,
   application_score_70: applicationScore,
   resume_score_10: resumeScore,
+  score_breakdown: scoreBreakdown,
   model: 'gpt-4o-mini',
   scored_at: new Date().toISOString()
 };
