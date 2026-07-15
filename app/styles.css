@@ -278,6 +278,8 @@ textarea.control { min-height: 130px; resize: vertical; }
 .mock-review-head p { margin-bottom: 0; color: var(--muted); font-size: 14px; }
 .score-chip { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 7px 10px; border-radius: 999px; color: var(--primary-dark); background: #edf2ff; font-size: 12px; font-weight: 950; white-space: nowrap; }
 .score-chip-dark { color: #fff; background: #111827; }
+.score-breakdown { margin: 14px; padding: 14px; border: 1px solid #dbeafe; border-radius: 14px; background: linear-gradient(180deg, #f8fbff, #ffffff); }
+.score-breakdown h4 { margin: 0 0 10px; font-size: 14px; color: #111827; }
 .mock-review-list { display: grid; gap: 12px; padding: 14px; }
 .mock-review-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 10px 22px rgba(15, 23, 42, .04); }
 .mock-review-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }

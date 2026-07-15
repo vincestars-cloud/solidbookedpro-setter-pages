@@ -699,6 +699,9 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
 
 function ReadableOperationalSummary({ applicant, events }: { applicant: ApplicantRecord; events: Array<Record<string, unknown>> }) {
   const recentEvents = events.slice(0, 6);
+  const qualificationEvent = events.find((event) => String(event.event_type || event.eventType || "") === "qualification_result");
+  const qualificationMetadata = (qualificationEvent?.metadata || {}) as Record<string, any>;
+  const scoreBreakdown = qualificationMetadata.scoreBreakdown as Record<string, unknown> | undefined;
   return (
     <section className="review-section">
       <div className="review-section-head">
@@ -717,6 +720,7 @@ function ReadableOperationalSummary({ applicant, events }: { applicant: Applican
         <ReadableField label="Abandonment point" value={applicant.abandoned_at_step ? `Step ${applicant.abandoned_at_step}` : "None"} />
         <ReadableField label="Hard flags" value={applicant.hard_flags?.length ? applicant.hard_flags.map(formatStatusLabel).join(", ") : "None"} wide />
       </div>
+      {scoreBreakdown ? <ScoreBreakdown breakdown={scoreBreakdown} /> : null}
       {recentEvents.length ? (
         <div className="event-list">
           {recentEvents.map((event, index) => (
@@ -731,6 +735,28 @@ function ReadableOperationalSummary({ applicant, events }: { applicant: Applican
         </div>
       ) : null}
     </section>
+  );
+}
+
+function ScoreBreakdown({ breakdown }: { breakdown: Record<string, unknown> }) {
+  const rows = [
+    ["Resume uploaded", readableYesNo(breakdown.resumeUploaded)],
+    ["Experience detail", `${breakdown.experienceScore || 0}/20`],
+    ["Past metrics", `${breakdown.metricsScore || 0}/25`],
+    ["CRM/platform detail", `${breakdown.crmScore || 0}/8`],
+    ["Industries/offers", `${breakdown.industriesScore || 0}/7`],
+    ["Call-library listening", `${breakdown.sampleListeningScore || 0}/10 (${breakdown.callLibraryOpened || 0} opened, ${breakdown.callLibraryAveragePercent || 0}% avg)`],
+    ["Mock-call quality", `${breakdown.mockCallScore || 0}/20 (${breakdown.mockScoredCalls || 0} AI-scored, ${breakdown.mockAverageScore || 0}/100 avg)`]
+  ];
+  return (
+    <div className="score-breakdown">
+      <h4>Fit score breakdown</h4>
+      <div className="readable-grid">
+        {rows.map(([label, value]) => (
+          <ReadableField key={label} label={label} value={value} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1088,6 +1114,10 @@ function formatReadableValue(value: unknown): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value);
+}
+
+function readableYesNo(value: unknown) {
+  return value === true || value === "true" ? "Yes" : "No";
 }
 
 function formatMediaKey(value: string) {

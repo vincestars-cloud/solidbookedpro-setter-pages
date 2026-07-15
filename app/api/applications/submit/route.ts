@@ -42,12 +42,18 @@ export async function POST(request: NextRequest) {
   const mockCalls = await listMockCalls(payload.applicantId);
   const completed = mockCalls.filter((call) => call.status === "completed").length;
   const microphoneGranted = Boolean(payload.mockCalls?.some((call) => call.status === "completed" || call.status === "live"));
+  const scoredCalls = mockCalls
+    .map((call) => Number(call.backend_score || call.backendScore || 0))
+    .filter((score) => Number.isFinite(score) && score > 0);
+  const mockAverageScore = scoredCalls.length ? scoredCalls.reduce((sum, item) => sum + item, 0) / scoredCalls.length : 0;
   const qualification = evaluateQualification({
     fields: payload.fields,
-    scenarios: payload.scenarios,
     mockCallsCompleted: completed,
     microphoneGranted,
-    duplicateSubmission
+    duplicateSubmission,
+    callLibrary: payload.callLibrary,
+    mockAverageScore,
+    mockScoredCalls: scoredCalls.length
   });
   const applicant = await completeSubmission(
     payload.applicantId,
@@ -59,7 +65,8 @@ export async function POST(request: NextRequest) {
   await saveEvent(payload.applicantId, "qualification_result", {
     status: qualification.status,
     internalScore: qualification.internalScore,
-    hardFlags: qualification.hardFlags
+    hardFlags: qualification.hardFlags,
+    scoreBreakdown: qualification.scoreBreakdown
   });
 
   return json({

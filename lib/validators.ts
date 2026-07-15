@@ -49,7 +49,7 @@ export const autosaveSchema = z.object({
 
 export const submitSchema = autosaveSchema.extend({
   fields: applicationFieldsSchema,
-  scenarios: z.array(scenarioResponseSchema).min(2)
+  scenarios: z.array(scenarioResponseSchema).optional().default([])
 });
 
 export const eventSchema = z.object({

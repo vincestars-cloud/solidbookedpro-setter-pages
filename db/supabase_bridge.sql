@@ -204,6 +204,18 @@ declare
   completed_calls integer := 0;
   hard_flags_arr text[] := array[]::text[];
   score integer := 0;
+  resume_uploaded boolean := false;
+  experience_score integer := 0;
+  metrics_score integer := 0;
+  crm_score integer := 0;
+  industries_score integer := 0;
+  sample_listening_score integer := 0;
+  mock_call_score integer := 0;
+  call_library_opened integer := 0;
+  call_library_average_percent numeric := 0;
+  mock_average_score numeric := 0;
+  mock_scored_calls integer := 0;
+  score_breakdown jsonb := '{}'::jsonb;
   result_status text := 'manual_review';
   fields jsonb;
   available_start text;
@@ -384,6 +396,36 @@ begin
     from public.sbp_setter_mock_calls
     where applicant_id = applicant_uuid and status = 'completed';
 
+    select exists (
+      select 1
+      from public.sbp_setter_resume_files
+      where applicant_id = applicant_uuid
+    ) or nullif(fields->>'resumeFileName', '') is not null
+    into resume_uploaded;
+
+    select
+      coalesce(count(*) filter (
+        where started = true
+          or seconds_consumed > 0
+          or percentage_consumed > 0
+      ), 0)::integer,
+      coalesce(avg(percentage_consumed) filter (
+        where started = true
+          or seconds_consumed > 0
+          or percentage_consumed > 0
+      ), 0)
+    into call_library_opened, call_library_average_percent
+    from public.sbp_setter_media_engagement
+    where applicant_id = applicant_uuid
+      and media_type = 'call_recording';
+
+    select
+      coalesce(avg(backend_score) filter (where backend_score is not null), 0),
+      coalesce(count(*) filter (where backend_score is not null), 0)::integer
+    into mock_average_score, mock_scored_calls
+    from public.sbp_setter_mock_calls
+    where applicant_id = applicant_uuid;
+
     available_start := fields->>'availableStart';
     available_end := fields->>'availableEnd';
     start_minutes := public.sbp_setter_time_minutes(available_start);
@@ -431,17 +473,94 @@ begin
       hard_flags_arr := array_append(hard_flags_arr, 'availability_outside_required_window');
     end if;
 
-    if coalesce(fields->>'pastMetrics', '') ~ '\d' then score := score + 18; end if;
-    if length(coalesce(fields->>'appointmentSettingExperience', '')) >= 160 then score := score + 18; end if;
-    if length(coalesce(fields->>'crmPlatforms', '')) >= 8 then score := score + 8; end if;
-    if length(coalesce(fields->>'industries', '')) >= 6 then score := score + 6; end if;
-    if coalesce(nullif(fields->>'desiredHourly', '')::numeric, 999) <= 8 then score := score + 12; end if;
-    if overlap_hours >= 5 then score := score + 10; end if;
-    if completed_calls = 3 then score := score + 6; end if;
+    if resume_uploaded then
+      score := score + 10;
+    end if;
+
+    if length(trim(coalesce(fields->>'appointmentSettingExperience', ''))) >= 300 then
+      experience_score := experience_score + 10;
+    elsif length(trim(coalesce(fields->>'appointmentSettingExperience', ''))) >= 120 then
+      experience_score := experience_score + 6;
+    elsif length(trim(coalesce(fields->>'appointmentSettingExperience', ''))) >= 60 then
+      experience_score := experience_score + 3;
+    end if;
+    if lower(coalesce(fields->>'appointmentSettingExperience', '')) ~ '(cold call|cold-call|appointment|setter|sales|objection|follow[ -]?up|dialer|prospect|crm|book|quota|show rate)' then
+      experience_score := experience_score + 10;
+    end if;
+    experience_score := least(experience_score, 20);
+
+    if coalesce(fields->>'pastMetrics', '') ~ '\d' then
+      metrics_score := metrics_score + 8;
+    end if;
+    if coalesce(fields->>'pastMetrics', '') ~ '(%|[0-9].*[0-9])' then
+      metrics_score := metrics_score + 7;
+    end if;
+    if lower(coalesce(fields->>'pastMetrics', '')) ~ '(appointment|book|show rate|close rate|call|conversation|quota|demo|meeting|held|set|conversion|kpi)' then
+      metrics_score := metrics_score + 10;
+    end if;
+    metrics_score := least(metrics_score, 25);
+
+    if length(trim(coalesce(fields->>'crmPlatforms', ''))) >= 8 then
+      crm_score := crm_score + 4;
+    end if;
+    if lower(coalesce(fields->>'crmPlatforms', '')) ~ '(crm|gohighlevel|highlevel|hubspot|salesforce|pipedrive|close|dialer|calendly|apollo|salesloft|outreach)' then
+      crm_score := crm_score + 4;
+    end if;
+    crm_score := least(crm_score, 8);
+
+    if length(trim(coalesce(fields->>'industries', ''))) >= 12 then
+      industries_score := 7;
+    elsif length(trim(coalesce(fields->>'industries', ''))) >= 5 then
+      industries_score := 4;
+    end if;
+
+    if call_library_average_percent >= 75 or call_library_opened >= 3 then
+      sample_listening_score := 10;
+    elsif call_library_average_percent >= 40 or call_library_opened >= 2 then
+      sample_listening_score := 6;
+    elsif call_library_opened >= 1 then
+      sample_listening_score := 3;
+    end if;
+
+    if mock_scored_calls > 0 then
+      mock_call_score := case
+        when mock_average_score >= 85 then 20
+        when mock_average_score >= 75 then 16
+        when mock_average_score >= 65 then 10
+        when mock_average_score >= 55 then 5
+        else 0
+      end;
+    elsif completed_calls = 3 then
+      mock_call_score := 5;
+    end if;
+
+    score := score
+      + experience_score
+      + metrics_score
+      + crm_score
+      + industries_score
+      + sample_listening_score
+      + mock_call_score;
+
+    score_breakdown := jsonb_build_object(
+      'resumeUploaded', resume_uploaded,
+      'resumeScore', case when resume_uploaded then 10 else 0 end,
+      'experienceScore', experience_score,
+      'metricsScore', metrics_score,
+      'crmScore', crm_score,
+      'industriesScore', industries_score,
+      'sampleListeningScore', sample_listening_score,
+      'callLibraryOpened', call_library_opened,
+      'callLibraryAveragePercent', round(call_library_average_percent)::integer,
+      'mockCallScore', mock_call_score,
+      'mockAverageScore', round(mock_average_score)::integer,
+      'mockScoredCalls', mock_scored_calls,
+      'completedMockCalls', completed_calls
+    );
 
     if array_length(hard_flags_arr, 1) is not null then
       result_status := 'not_qualified';
-    elsif score >= 70 then
+    elsif score >= 75 and (mock_scored_calls = 0 or mock_average_score >= 70) then
       result_status := 'qualified';
     else
       result_status := 'manual_review';
@@ -463,7 +582,7 @@ begin
 
     insert into public.sbp_setter_application_events (applicant_id, event_type, step, metadata)
     values
-      (applicant_uuid, 'qualification_result', 4, jsonb_build_object('status', result_status, 'internalScore', score, 'hardFlags', hard_flags_arr)),
+      (applicant_uuid, 'qualification_result', 4, jsonb_build_object('status', result_status, 'internalScore', score, 'hardFlags', hard_flags_arr, 'scoreBreakdown', score_breakdown)),
       (applicant_uuid, 'application_submitted', 4, jsonb_build_object('status', result_status));
 
     return jsonb_build_object(

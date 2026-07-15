@@ -14,9 +14,12 @@ const fields = applicationFieldsSchema.parse({
   vocarooUrl: "https://voca.ro/123456789",
   crmPlatforms: "GoHighLevel, Calendly, HubSpot",
   appointmentSettingExperience:
-    "I have set appointments for local service offers, handled objections, documented CRM notes, and followed up consistently.",
+    "I have set appointments for local service offers, handled objections, documented CRM notes, and followed up consistently. Most of my work has been cold calling, appointment setting, objection handling, follow-up, and booking prospects into qualified sales conversations while keeping clean pipeline notes.",
   industries: "Home services, agencies, B2B services",
   pastMetrics: "Made 110 calls per day, booked 28 appointments per month, and held a 44% show rate.",
+  resumeFileName: "resume.pdf",
+  resumeFileSize: 12345,
+  resumeFileType: "application/pdf",
   salesProcessAcknowledged: true,
   founderVideoAcknowledged: true,
   recordingConsent: true,
@@ -27,20 +30,13 @@ assert.equal(fields.email, "test@example.com");
 
 const result = evaluateQualification({
   fields,
-  scenarios: [
-    {
-      questionKey: "below_target_three_days",
-      response:
-        "I would review activity, call quality, and follow-up speed, compare against the best previous day, ask for feedback, and make a specific adjustment plan."
-    },
-    {
-      questionKey: "send_me_information",
-      response:
-        "I would acknowledge it, ask what information matters most, give a concise answer, and ask for the next step while the context is fresh."
-    }
-  ],
   mockCallsCompleted: 3,
   microphoneGranted: true,
+  callLibrary: [
+    { started: true, secondsConsumed: 112, percentageConsumed: 100 },
+    { started: true, secondsConsumed: 148, percentageConsumed: 100 },
+    { started: true, secondsConsumed: 283, percentageConsumed: 100 }
+  ],
   duplicateSubmission: false
 });
 
@@ -49,9 +45,9 @@ assert.equal(result.hardFlags.length, 0);
 
 const duplicate = evaluateQualification({
   fields,
-  scenarios: [],
   mockCallsCompleted: 3,
   microphoneGranted: true,
+  callLibrary: [],
   duplicateSubmission: true
 });
 
