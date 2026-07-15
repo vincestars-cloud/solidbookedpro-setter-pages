@@ -228,6 +228,9 @@ textarea.control { min-height: 130px; resize: vertical; }
 .answer-card { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcff; }
 .answer-card span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .answer-card p { margin: 0; color: #263244; overflow-wrap: anywhere; }
+.answer-card small { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.resume-admin-card { grid-column: 1 / -1; }
+.resume-admin-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .admin-detail-block { border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
 .admin-detail-block summary { padding: 12px 14px; cursor: pointer; background: #f8fafc; }
 .admin-detail-block pre { margin: 0; padding: 14px; color: #263244; font-size: 12px; }

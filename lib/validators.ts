@@ -23,6 +23,7 @@ export const applicationFieldsSchema = z.object({
   pastMetrics: z.string().trim().min(1, "Past metrics or measurable results are required.").max(2500),
   resumeFileName: z.string().trim().max(240).optional().default(""),
   resumeFileSize: z.coerce.number().nonnegative().max(10_000_000).optional().default(0),
+  resumeFileType: z.string().trim().max(120).optional().default(""),
   salesProcessAcknowledged: z.boolean().optional().default(false),
   founderVideoAcknowledged: z.boolean().optional().default(false),
   recordingConsent: z.boolean().optional().default(false),

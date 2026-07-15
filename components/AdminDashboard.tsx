@@ -31,6 +31,14 @@ type Bundle = {
   raw?: StaticSubmission | null;
 };
 
+type ResumePayload = {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  fileBase64: string;
+  uploadedAt?: string;
+};
+
 export function AdminDashboard() {
   const [token, setToken] = useState("");
   const [applicants, setApplicants] = useState<ApplicantRecord[]>([]);
@@ -40,6 +48,7 @@ export function AdminDashboard() {
   const [sort, setSort] = useState("newest");
   const [note, setNote] = useState("");
   const [loadMessage, setLoadMessage] = useState("");
+  const [resumeMessage, setResumeMessage] = useState("");
 
   useEffect(() => {
     const saved = sessionStorage.getItem("sbp_admin_token") || "";
@@ -235,6 +244,35 @@ export function AdminDashboard() {
     await openApplicant(selected.applicant.id);
   }
 
+  async function openResume(mode: "preview" | "download") {
+    if (!selected) return;
+    setResumeMessage("Preparing resume...");
+    try {
+      if (!bridgeMode) {
+        setResumeMessage("Resume file content is only available for Supabase-backed submissions.");
+        return;
+      }
+      const body = await setterBridgeRequest<{ resume: ResumePayload }>("admin_resume", { token, id: selected.applicant.id });
+      const resume = body.resume;
+      const blob = base64ToBlob(resume.fileBase64, resume.fileType);
+      const url = URL.createObjectURL(blob);
+      if (mode === "preview" && (resume.fileType === "application/pdf" || resume.fileType.startsWith("image/"))) {
+        window.open(url, "_blank", "noopener,noreferrer");
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        setResumeMessage("Opened resume preview.");
+        return;
+      }
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = resume.fileName || "resume";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setResumeMessage(mode === "preview" ? "This file type downloads instead of previewing." : "Resume download started.");
+    } catch (error) {
+      setResumeMessage(error instanceof Error ? error.message : "Resume could not be opened.");
+    }
+  }
+
   function exportStatic(format: "csv" | "json") {
     const submissions = bridgeMode ? [] : getStaticSubmissions();
     const fileBody =
@@ -356,7 +394,14 @@ export function AdminDashboard() {
                   <Answer label="Availability" value={selected.applicant.availability_est ? `${selected.applicant.availability_est.start}-${selected.applicant.availability_est.end} ET` : ""} />
                   <Answer label="Earliest start" value={selected.applicant.earliest_start_date} />
                   <Answer label="Vocaroo" value={selected.applicant.vocaroo_url} />
-                  <Answer label="Resume" value={selected.applicant.resume_file_name || selected.raw?.fields?.resumeFileName || ""} />
+                  <ResumeAnswer
+                    fileName={selected.applicant.resume_file_name || selected.raw?.fields?.resumeFileName || ""}
+                    fileSize={selected.applicant.resume_file_size || selected.raw?.fields?.resumeFileSize || 0}
+                    fileType={selected.applicant.resume_file_type || ""}
+                    message={resumeMessage}
+                    onPreview={() => openResume("preview")}
+                    onDownload={() => openResume("download")}
+                  />
                 </div>
                 <div className="field full">
                   <label htmlFor="note">Internal notes</label>
@@ -396,6 +441,37 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 function Answer({ label, value }: { label: string; value: unknown }) {
   return <div className="answer-card"><span>{label}</span><p>{String(value || "")}</p></div>;
+}
+
+function ResumeAnswer({
+  fileName,
+  fileSize,
+  fileType,
+  message,
+  onPreview,
+  onDownload
+}: {
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  message: string;
+  onPreview: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="answer-card resume-admin-card">
+      <span>Resume</span>
+      <p>{fileName || "No resume uploaded"}</p>
+      {fileName && <small>{[formatFileSize(fileSize), fileType].filter(Boolean).join(" · ")}</small>}
+      {fileName && (
+        <div className="resume-admin-actions">
+          <button className="btn btn-secondary btn-small" type="button" onClick={onPreview}>Preview</button>
+          <button className="btn btn-primary btn-small" type="button" onClick={onDownload}>Download</button>
+        </div>
+      )}
+      {message && <small>{message}</small>}
+    </div>
+  );
 }
 
 function Detail({ title, value }: { title: string; value: unknown }) {
@@ -453,6 +529,8 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     past_metrics: fields.pastMetrics || null,
     resume_file_name: fields.resumeFileName || null,
     resume_file_size: fields.resumeFileSize || null,
+    resume_file_type: fields.resumeFileType || null,
+    resume_uploaded_at: null,
     application_status: completed ? "application_completed" : "started",
     qualification_status: completed ? "manual_review" : null,
     internal_score: null,
@@ -482,6 +560,27 @@ function getMockCallsCompleted(applicantId: string, applicants: ApplicantRecord[
 
 function truncate(value: string, length: number) {
   return value.length > length ? `${value.slice(0, length - 1)}...` : value;
+}
+
+function base64ToBlob(base64: string, type: string) {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: type || "application/octet-stream" });
+}
+
+function formatFileSize(bytes: number) {
+  if (!bytes) return "";
+  const units = ["bytes", "KB", "MB"];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function toCsv(applicants: ApplicantRecord[]) {

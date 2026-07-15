@@ -32,6 +32,7 @@ const emptyFields: Partial<ApplicationFields> = {
   pastMetrics: "",
   resumeFileName: "",
   resumeFileSize: 0,
+  resumeFileType: "",
   salesProcessAcknowledged: false,
   founderVideoAcknowledged: false,
   recordingConsent: false,
@@ -53,6 +54,7 @@ export function ApplicationFunnel({ config }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicateMessage, setDuplicateMessage] = useState("");
   const [saveState, setSaveState] = useState("Not saved yet.");
+  const [resumeUploadState, setResumeUploadState] = useState("");
   const [result, setResult] = useState<ResultState>(null);
   const [submitting, setSubmitting] = useState(false);
   const [micGranted, setMicGranted] = useState(false);
@@ -529,6 +531,63 @@ export function ApplicationFunnel({ config }: Props) {
     }
   }
 
+  async function uploadResume(file: File | null) {
+    if (!file) {
+      updateField("resumeFileName", "" as any);
+      updateField("resumeFileSize", 0 as any);
+      updateField("resumeFileType", "" as any);
+      setResumeUploadState("");
+      return;
+    }
+    const allowed = new Set([
+      "application/pdf",
+      "image/png",
+      "image/jpeg",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ]);
+    if (!allowed.has(file.type)) {
+      setErrors((prev) => ({ ...prev, resumeFileName: "Upload a PDF, DOC, DOCX, PNG, or JPG resume." }));
+      return;
+    }
+    if (file.size > 5_000_000) {
+      setErrors((prev) => ({ ...prev, resumeFileName: "Resume must be 5 MB or smaller." }));
+      return;
+    }
+    const sessionId = await ensureSession();
+    if (!sessionId) {
+      setErrors((prev) => ({ ...prev, resumeFileName: "Enter a valid email before uploading your resume." }));
+      return;
+    }
+    setResumeUploadState("Uploading resume...");
+    setErrors((prev) => ({ ...prev, resumeFileName: "" }));
+    try {
+      const fileBase64 = await fileToBase64(file);
+      if (setterBridgeUrl) {
+        await setterBridgeRequest("resume_upload", {
+          applicantId: sessionId,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          fileBase64
+        });
+        setResumeUploadState("Resume uploaded.");
+      } else {
+        setResumeUploadState("Resume selected. File storage is unavailable in this mode.");
+      }
+      updateField("resumeFileName", file.name as any);
+      updateField("resumeFileSize", file.size as any);
+      updateField("resumeFileType", file.type as any);
+      track("resume_uploaded", { fileName: file.name, fileType: file.type, fileSize: file.size, applicantId: sessionId });
+    } catch (error) {
+      setResumeUploadState("");
+      setErrors((prev) => ({
+        ...prev,
+        resumeFileName: error instanceof Error ? error.message : "Resume upload failed."
+      }));
+    }
+  }
+
   function renderError(key: string) {
     return errors[key] ? <span className="error-text inline-error" role="alert">{errors[key]}</span> : <span className="error-text" />;
   }
@@ -720,10 +779,7 @@ export function ApplicationFunnel({ config }: Props) {
                         <Textarea id="appointmentSettingExperience" label="What appointment-setting or cold-calling experience have you had?" value={fields.appointmentSettingExperience} onChange={(v) => updateField("appointmentSettingExperience", v)} error={renderError("appointmentSettingExperience")} full={false} compact />
                         <Textarea id="industries" label="What industries or offers have you worked with?" value={fields.industries} onChange={(v) => updateField("industries", v)} error={renderError("industries")} full={false} compact />
                         <Textarea id="pastMetrics" label="What are some of the past metrics that you had?" value={fields.pastMetrics} onChange={(v) => updateField("pastMetrics", v)} error={renderError("pastMetrics")} helper="Include specific numbers when possible, such as calls made, conversations, appointments booked, show rate, close rate, or quota performance." />
-                        <ResumeUpload fileName={fields.resumeFileName || ""} fileSize={fields.resumeFileSize || 0} onChange={(file) => {
-                          updateField("resumeFileName", (file?.name || "") as any);
-                          updateField("resumeFileSize", (file?.size || 0) as any);
-                        }} />
+                        <ResumeUpload fileName={fields.resumeFileName || ""} fileSize={fields.resumeFileSize || 0} status={resumeUploadState} error={renderError("resumeFileName")} onChange={uploadResume} />
                       </div>
                       {duplicateMessage && <p className="notice" role="alert">{duplicateMessage}</p>}
                       <div className="actions"><span /><button className="btn btn-primary" onClick={() => goToStep(2)}>Continue</button></div>
@@ -1054,9 +1110,11 @@ function Textarea({ id, label, value, onChange, error, helper, full = true, comp
   );
 }
 
-function ResumeUpload({ fileName, fileSize, onChange }: {
+function ResumeUpload({ fileName, fileSize, status, error, onChange }: {
   fileName: string;
   fileSize: number;
+  status: string;
+  error: React.ReactNode;
   onChange: (file: File | null) => void;
 }) {
   return (
@@ -1068,15 +1126,17 @@ function ResumeUpload({ fileName, fileSize, onChange }: {
           id="resumeUpload"
           name="resumeUpload"
           type="file"
-          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           onChange={(event) => onChange(event.target.files?.[0] || null)}
         />
       </label>
       {fileName ? (
         <span className="resume-file">{fileName} {fileSize ? `(${formatFileSize(fileSize)})` : ""}</span>
       ) : (
-        <span className="field-help">PDF, DOC, or DOCX preferred.</span>
+        <span className="field-help">PDF, DOC, DOCX, PNG, or JPG. 5 MB max.</span>
       )}
+      {status && <span className="field-help">{status}</span>}
+      {error}
     </div>
   );
 }
@@ -1141,4 +1201,16 @@ function formatFileSize(bytes: number) {
     unitIndex += 1;
   }
   return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Resume could not be read."));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",").pop() || "" : result);
+    };
+    reader.readAsDataURL(file);
+  });
 }

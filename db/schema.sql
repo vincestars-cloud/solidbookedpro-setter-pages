@@ -16,6 +16,8 @@ create table if not exists sbp_setter_applicants (
   past_metrics text,
   resume_file_name text,
   resume_file_size integer,
+  resume_file_type text,
+  resume_uploaded_at timestamptz,
   application_status text not null default 'started',
   qualification_status text check (qualification_status in ('qualified', 'manual_review', 'not_qualified')),
   internal_score integer,
@@ -41,7 +43,19 @@ create unique index if not exists sbp_setter_applicants_normalized_email_unique
 
 alter table sbp_setter_applicants
   add column if not exists resume_file_name text,
-  add column if not exists resume_file_size integer;
+  add column if not exists resume_file_size integer,
+  add column if not exists resume_file_type text,
+  add column if not exists resume_uploaded_at timestamptz;
+
+create table if not exists sbp_setter_resume_files (
+  applicant_id uuid primary key references sbp_setter_applicants(id) on delete cascade,
+  file_name text not null,
+  file_type text not null,
+  file_size integer not null,
+  file_base64 text not null,
+  uploaded_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
 create table if not exists sbp_setter_application_events (
   id uuid primary key default gen_random_uuid(),
@@ -113,6 +127,7 @@ alter table sbp_setter_media_engagement enable row level security;
 alter table sbp_setter_mock_calls enable row level security;
 alter table sbp_setter_scenario_responses enable row level security;
 alter table sbp_setter_admin_notes enable row level security;
+alter table sbp_setter_resume_files enable row level security;
 
 do $$
 begin
@@ -133,5 +148,8 @@ begin
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'sbp_setter_admin_notes' and policyname = 'service role full access sbp_setter_admin_notes') then
     create policy "service role full access sbp_setter_admin_notes" on sbp_setter_admin_notes for all using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'sbp_setter_resume_files' and policyname = 'service role full access sbp_setter_resume_files') then
+    create policy "service role full access sbp_setter_resume_files" on sbp_setter_resume_files for all using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
   end if;
 end $$;

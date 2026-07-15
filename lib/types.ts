@@ -34,6 +34,8 @@ export type ApplicantRecord = {
   past_metrics: string | null;
   resume_file_name: string | null;
   resume_file_size: number | null;
+  resume_file_type: string | null;
+  resume_uploaded_at: string | null;
   application_status: ApplicationStatus;
   qualification_status: QualificationStatus | null;
   internal_score: number | null;
@@ -68,6 +70,7 @@ export type ApplicationFields = {
   pastMetrics: string;
   resumeFileName: string;
   resumeFileSize: number;
+  resumeFileType: string;
   salesProcessAcknowledged: boolean;
   founderVideoAcknowledged: boolean;
   recordingConsent: boolean;

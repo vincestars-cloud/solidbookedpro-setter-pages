@@ -105,6 +105,7 @@ export async function updateApplicantFields(id: string, fields: Partial<Applicat
   if (fields.pastMetrics !== undefined) patch.past_metrics = fields.pastMetrics;
   if (fields.resumeFileName !== undefined) patch.resume_file_name = fields.resumeFileName;
   if (fields.resumeFileSize !== undefined) patch.resume_file_size = fields.resumeFileSize;
+  if (fields.resumeFileType !== undefined) patch.resume_file_type = fields.resumeFileType;
   if (currentStep !== undefined) patch.current_step = currentStep;
   if (highestStep !== undefined) patch.application_status = statusFromStep(highestStep);
   patch.updated_at = new Date().toISOString();

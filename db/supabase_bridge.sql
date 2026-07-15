@@ -11,6 +11,22 @@ as $$
   end
 $$;
 
+alter table public.sbp_setter_applicants
+  add column if not exists resume_file_type text,
+  add column if not exists resume_uploaded_at timestamptz;
+
+create table if not exists public.sbp_setter_resume_files (
+  applicant_id uuid primary key references public.sbp_setter_applicants(id) on delete cascade,
+  file_name text not null,
+  file_type text not null,
+  file_size integer not null,
+  file_base64 text not null,
+  uploaded_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.sbp_setter_resume_files enable row level security;
+
 create or replace function public.sbp_setter_status_from_step(step_value integer)
 returns text
 language sql
@@ -68,6 +84,7 @@ begin
       when fields ? 'resumeFileSize' and nullif(fields->>'resumeFileSize', '') is not null then (fields->>'resumeFileSize')::integer
       else resume_file_size
     end,
+    resume_file_type = case when fields ? 'resumeFileType' then nullif(fields->>'resumeFileType', '') else resume_file_type end,
     current_step = current_step_value,
     application_status = public.sbp_setter_status_from_step(highest_step_value),
     abandoned_at_step = current_step_value,
@@ -188,6 +205,11 @@ declare
   scenarios_all_long boolean := false;
   rows_json jsonb;
   patch jsonb;
+  file_name text;
+  file_type text;
+  file_size integer;
+  file_base64 text;
+  resume_row public.sbp_setter_resume_files%rowtype;
 begin
   if action = 'health' then
     return jsonb_build_object('ok', true, 'service', 'sbp_setter_bridge');
@@ -250,6 +272,60 @@ begin
       coalesce(payload->'metadata', '{}'::jsonb)
     );
     return jsonb_build_object('ok', true);
+  end if;
+
+  if action = 'resume_upload' then
+    applicant_uuid := nullif(payload->>'applicantId', '')::uuid;
+    file_name := nullif(payload->>'fileName', '');
+    file_type := coalesce(nullif(payload->>'fileType', ''), 'application/octet-stream');
+    file_size := coalesce(nullif(payload->>'fileSize', '')::integer, 0);
+    file_base64 := nullif(payload->>'fileBase64', '');
+
+    if applicant_uuid is null or file_name is null or file_base64 is null then
+      return jsonb_build_object('ok', false, 'message', 'Resume upload is missing required data.');
+    end if;
+    if file_size <= 0 or file_size > 5000000 then
+      return jsonb_build_object('ok', false, 'message', 'Resume must be 5 MB or smaller.');
+    end if;
+    if file_type not in (
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) then
+      return jsonb_build_object('ok', false, 'message', 'Upload a PDF, DOC, DOCX, PNG, or JPG resume.');
+    end if;
+
+    insert into public.sbp_setter_resume_files (applicant_id, file_name, file_type, file_size, file_base64, uploaded_at, updated_at)
+    values (applicant_uuid, file_name, file_type, file_size, file_base64, now(), now())
+    on conflict (applicant_id)
+    do update set
+      file_name = excluded.file_name,
+      file_type = excluded.file_type,
+      file_size = excluded.file_size,
+      file_base64 = excluded.file_base64,
+      updated_at = now()
+    returning * into resume_row;
+
+    update public.sbp_setter_applicants
+    set
+      resume_file_name = file_name,
+      resume_file_size = file_size,
+      resume_file_type = file_type,
+      resume_uploaded_at = resume_row.updated_at,
+      updated_at = now()
+    where id = applicant_uuid;
+
+    insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
+    values (applicant_uuid, 'resume_uploaded', jsonb_build_object('fileName', file_name, 'fileType', file_type, 'fileSize', file_size));
+
+    return jsonb_build_object('ok', true, 'resume', jsonb_build_object(
+      'fileName', file_name,
+      'fileType', file_type,
+      'fileSize', file_size,
+      'uploadedAt', resume_row.updated_at
+    ));
   end if;
 
   if action = 'submit' then
@@ -361,7 +437,7 @@ begin
     );
   end if;
 
-  if action in ('admin_list', 'admin_detail', 'admin_status', 'admin_note') then
+  if action in ('admin_list', 'admin_detail', 'admin_status', 'admin_note', 'admin_resume') then
     if coalesce(payload->>'token', '') <> admin_password then
       return jsonb_build_object('ok', false, 'message', 'Enter the admin password to view applicants.');
     end if;
@@ -390,6 +466,24 @@ begin
       'mockCalls', coalesce((select jsonb_agg(to_jsonb(c) order by c.mock_call_number) from public.sbp_setter_mock_calls c where c.applicant_id = applicant_uuid), '[]'::jsonb),
       'scenarios', coalesce((select jsonb_agg(to_jsonb(s) order by s.question_key) from public.sbp_setter_scenario_responses s where s.applicant_id = applicant_uuid), '[]'::jsonb),
       'notes', coalesce((select jsonb_agg(to_jsonb(n) order by n.created_at desc) from public.sbp_setter_admin_notes n where n.applicant_id = applicant_uuid), '[]'::jsonb)
+    );
+  end if;
+
+  if action = 'admin_resume' then
+    applicant_uuid := nullif(payload->>'id', '')::uuid;
+    select * into resume_row from public.sbp_setter_resume_files where applicant_id = applicant_uuid;
+    if not found then
+      return jsonb_build_object('ok', false, 'message', 'No resume file is stored for this applicant.');
+    end if;
+    return jsonb_build_object(
+      'ok', true,
+      'resume', jsonb_build_object(
+        'fileName', resume_row.file_name,
+        'fileType', resume_row.file_type,
+        'fileSize', resume_row.file_size,
+        'fileBase64', resume_row.file_base64,
+        'uploadedAt', resume_row.updated_at
+      )
     );
   end if;
 
