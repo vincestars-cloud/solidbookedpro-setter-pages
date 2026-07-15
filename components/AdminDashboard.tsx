@@ -55,9 +55,13 @@ type ResumePayload = {
 type MockCallRecord = Record<string, any> & {
   mock_call_number?: number;
   mockCallNumber?: number;
+  vapi_call_id?: string;
+  vapiCallId?: string;
   status?: string;
   duration_seconds?: number;
   durationSeconds?: number;
+  ended_reason?: string;
+  endedReason?: string;
   backend_score?: number;
   backendScore?: number;
   transcript?: string;
@@ -513,20 +517,77 @@ export function AdminDashboard() {
                 </div>
               </div>
               <div className="admin-detail-body">
-                <Detail title="Application answers" value={selected.applicant} />
-                <Detail title="Call-library engagement" value={selected.media} />
+                <ReadableApplicationAnswers applicant={selected.applicant} />
+                <ReadableEngagement media={selected.media} />
                 <MockCallReviews calls={selected.mockCalls as MockCallRecord[]} />
-                <Detail title="Raw mock-call records" value={selected.mockCalls} />
-                <Detail title="Scenario answers" value={selected.scenarios} />
-                <Detail title="Step timing, abandonment, qualification outcome, hard flags, internal score" value={{ events: selected.events, hardFlags: selected.applicant.hard_flags, internalScore: selected.applicant.internal_score, abandonmentPoint: selected.applicant.abandoned_at_step, qualificationOutcome: selected.applicant.qualification_status }} />
-                <Detail title="Interview details and hiring-stage status" value={{ interview: selected.applicant.interview_details, interviewStatus: selected.applicant.interview_status, hiringStageStatus: selected.applicant.hiring_stage_status }} />
-                <Detail title="Internal notes" value={selected.notes} />
+                <ReadableScenarioResponses scenarios={selected.scenarios} />
+                <ReadableOperationalSummary applicant={selected.applicant} events={selected.events} />
               </div>
             </div>
           </section>
         )}
       </div>
     </main>
+  );
+}
+
+function ReadableApplicationAnswers({ applicant }: { applicant: ApplicantRecord }) {
+  return (
+    <section className="review-section">
+      <div className="review-section-head">
+        <div>
+          <h3>Application answers</h3>
+          <p>Readable applicant profile, schedule, experience, and links.</p>
+        </div>
+      </div>
+      <div className="readable-grid">
+        <ReadableField label="Full name" value={applicant.full_name} />
+        <ReadableField label="Preferred name" value={applicant.preferred_name} />
+        <ReadableField label="Email" value={applicant.normalized_email} />
+        <ReadableField label="Desired pay" value={applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""} />
+        <ReadableField label="Availability" value={applicant.availability_est ? `${applicant.availability_est.start} to ${applicant.availability_est.end} ET` : ""} />
+        <ReadableField label="Earliest start date" value={formatDate(applicant.earliest_start_date)} />
+        <ReadableField label="Vocaroo recording" value={applicant.vocaroo_url} href={applicant.vocaroo_url || undefined} />
+        <ReadableField label="Resume" value={applicant.resume_file_name || "No resume uploaded"} />
+        <ReadableField label="CRM or scheduling platforms" value={applicant.crm_platforms} wide />
+        <ReadableField label="Appointment setting or cold calling experience" value={applicant.appointment_setting_experience} wide />
+        <ReadableField label="Industries or offers worked with" value={applicant.industries} wide />
+        <ReadableField label="Past metrics" value={applicant.past_metrics} wide />
+      </div>
+    </section>
+  );
+}
+
+function ReadableEngagement({ media }: { media: Array<Record<string, unknown>> }) {
+  const callRecordings = media.filter((item) => String(item.media_type || item.mediaType || "") === "call_recording");
+  return (
+    <section className="review-section">
+      <div className="review-section-head">
+        <div>
+          <h3>Call-library listening</h3>
+          <p>Optional sample-call engagement before the role plays.</p>
+        </div>
+      </div>
+      {callRecordings.length ? (
+        <div className="compact-list">
+          {callRecordings.map((item, index) => {
+            const percent = Number(item.percentage_consumed || item.percentageConsumed || 0);
+            const seconds = Number(item.seconds_consumed || item.secondsConsumed || 0);
+            return (
+              <div className="compact-row" key={String(item.id || item.media_key || item.mediaKey || index)}>
+                <div>
+                  <strong>{formatMediaKey(String(item.media_key || item.mediaKey || `Recording ${index + 1}`))}</strong>
+                  <span>{seconds ? `${formatDuration(seconds)} listened` : "Not listened yet"}</span>
+                </div>
+                <span className="pill">{percent ? `${percent}%` : "0%"}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="empty-text">No sample-call engagement saved yet.</p>
+      )}
+    </section>
   );
 }
 
@@ -565,13 +626,15 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
           const structured = getStructuredOutput(call);
           const moments = extractObjectionMoments(structured);
           const transcript = String(call.transcript || "");
-          const recordingUrl = String(call.recording_url || call.recordingUrl || "");
+          const recordingUrl = getRecordingUrl(call, structured);
+          const vapiCallId = String(call.vapi_call_id || call.vapiCallId || "");
+          const endedReason = String(call.ended_reason || call.endedReason || "");
           return (
-            <article className="mock-review-card" key={`${number}-${call.vapi_call_id || call.vapiCallId || "call"}`}>
+            <article className="mock-review-card" key={`${number}-${vapiCallId || "call"}`}>
               <div className="mock-review-card-head">
                 <div>
                   <h4>Mock Call {number}</h4>
-                  <p>{[call.status, formatDuration(call.duration_seconds || call.durationSeconds)].filter(Boolean).join(" · ")}</p>
+                  <p>{[formatStatusLabel(String(call.status || "")), formatDuration(call.duration_seconds || call.durationSeconds), endedReason && `Ended: ${formatStatusLabel(endedReason)}`].filter(Boolean).join(" · ")}</p>
                 </div>
                 <span className="score-chip score-chip-dark">{score ? `${score}/100` : "No score"}</span>
               </div>
@@ -579,8 +642,9 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
               {call.summary && <p className="call-summary">{String(call.summary)}</p>}
 
               <div className="review-actions">
-                {recordingUrl && <a className="btn btn-secondary btn-small" href={recordingUrl} target="_blank" rel="noreferrer">Open recording</a>}
-                {call.vapi_call_id && <span className="media-meta">Vapi call: {String(call.vapi_call_id)}</span>}
+                {recordingUrl ? <a className="btn btn-primary btn-small" href={recordingUrl} target="_blank" rel="noreferrer">Listen to recording</a> : <span className="media-meta">No recording URL saved yet</span>}
+                {recordingUrl && <a className="recording-url" href={recordingUrl} target="_blank" rel="noreferrer">{recordingUrl}</a>}
+                {vapiCallId && <span className="media-meta">Vapi call: {vapiCallId}</span>}
               </div>
 
               <div className="objection-list">
@@ -615,8 +679,8 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
 
               {structured && (
                 <details className="transcript-block">
-                  <summary>Raw AI scorecard</summary>
-                  <pre>{JSON.stringify(structured, null, 2)}</pre>
+                  <summary>Technical AI scorecard</summary>
+                  <ReadableScorecard structured={structured} />
                 </details>
               )}
             </article>
@@ -624,6 +688,105 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
         })}
       </div>
     </section>
+  );
+}
+
+function ReadableScenarioResponses({ scenarios }: { scenarios: Array<Record<string, unknown>> }) {
+  return (
+    <section className="review-section">
+      <div className="review-section-head">
+        <div>
+          <h3>Final written responses</h3>
+          <p>Any written scenario questions configured for this version of the application.</p>
+        </div>
+      </div>
+      {scenarios.length ? (
+        <div className="readable-stack">
+          {scenarios.map((item, index) => (
+            <ReadableField
+              key={String(item.id || item.question_key || item.questionKey || index)}
+              label={formatMediaKey(String(item.question_key || item.questionKey || `Question ${index + 1}`))}
+              value={item.response}
+              wide
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="empty-text">No written scenario questions were included for this application version.</p>
+      )}
+    </section>
+  );
+}
+
+function ReadableOperationalSummary({ applicant, events }: { applicant: ApplicantRecord; events: Array<Record<string, unknown>> }) {
+  const recentEvents = events.slice(0, 6);
+  return (
+    <section className="review-section">
+      <div className="review-section-head">
+        <div>
+          <h3>Hiring summary</h3>
+          <p>Status, flags, timing, and recent saved events.</p>
+        </div>
+        <span className="score-chip">{applicant.internal_score ? `${applicant.internal_score}/100 internal` : "No internal score"}</span>
+      </div>
+      <div className="readable-grid">
+        <ReadableField label="Application status" value={formatStatusLabel(applicant.application_status)} />
+        <ReadableField label="Qualification" value={formatStatusLabel(applicant.qualification_status || "pending")} />
+        <ReadableField label="Fit status" value={formatStatusLabel(applicant.hiring_stage_status || "none")} />
+        <ReadableField label="Interview status" value={formatStatusLabel(applicant.interview_status)} />
+        <ReadableField label="Started" value={formatDateTime(applicant.started_at)} />
+        <ReadableField label="Submitted" value={formatDateTime(applicant.submitted_at)} />
+        <ReadableField label="Abandonment point" value={applicant.abandoned_at_step ? `Step ${applicant.abandoned_at_step}` : "None"} />
+        <ReadableField label="Hard flags" value={applicant.hard_flags?.length ? applicant.hard_flags.map(formatStatusLabel).join(", ") : "None"} wide />
+      </div>
+      {recentEvents.length ? (
+        <div className="event-list">
+          {recentEvents.map((event, index) => (
+            <div className="compact-row" key={String(event.id || index)}>
+              <div>
+                <strong>{formatStatusLabel(String(event.event_type || event.eventType || "Event"))}</strong>
+                <span>{event.step ? `Step ${event.step}` : "Application event"}</span>
+              </div>
+              <span className="media-meta">{formatDateTime(String(event.occurred_at || event.occurredAt || ""))}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ReadableField({ label, value, href, wide = false }: { label: string; value: unknown; href?: string; wide?: boolean }) {
+  const display = formatReadableValue(value);
+  return (
+    <div className={`readable-field ${wide ? "wide" : ""}`}>
+      <span>{label}</span>
+      {href ? <a href={href} target="_blank" rel="noreferrer">{display}</a> : <p>{display}</p>}
+    </div>
+  );
+}
+
+function ReadableScorecard({ structured }: { structured: Record<string, any> }) {
+  const rows = [
+    ["Overall score", structured.overall_score || structured.overallScore || structured.score],
+    ["Summary", structured.summary || structured.call_summary || structured.callSummary],
+    ["Strengths", structured.strengths],
+    ["Concerns", structured.concerns || structured.red_flags || structured.redFlags],
+    ["Recommendation", structured.recommendation || structured.decision]
+  ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
+  if (!rows.length) {
+    return <pre>{JSON.stringify(structured, null, 2)}</pre>;
+  }
+  return (
+    <div className="scorecard-readable">
+      {rows.map(([label, value]) => (
+        <ReadableField key={String(label)} label={String(label)} value={Array.isArray(value) ? value.join(", ") : value} wide />
+      ))}
+      <details>
+        <summary>Raw technical data</summary>
+        <pre>{JSON.stringify(structured, null, 2)}</pre>
+      </details>
+    </div>
   );
 }
 
@@ -811,6 +974,26 @@ function getStructuredOutput(call: MockCallRecord) {
   return raw;
 }
 
+function getRecordingUrl(call: MockCallRecord, structured: Record<string, any> | null) {
+  const candidates = [
+    call.recording_url,
+    call.recordingUrl,
+    call.recording?.url,
+    call.artifact?.recordingUrl,
+    call.artifact?.recording_url,
+    call.artifacts?.recordingUrl,
+    call.artifacts?.recording_url,
+    structured?.recording_url,
+    structured?.recordingUrl,
+    structured?.recording?.url,
+    structured?.artifact?.recordingUrl,
+    structured?.artifact?.recording_url,
+    structured?.artifacts?.recordingUrl,
+    structured?.artifacts?.recording_url
+  ];
+  return String(candidates.find((value) => typeof value === "string" && /^https?:\/\//i.test(value)) || "");
+}
+
 function extractObjectionMoments(structured: Record<string, any> | null): ObjectionMoment[] {
   if (!structured) return [];
   const candidates = [
@@ -886,6 +1069,36 @@ function formatDuration(seconds?: number) {
 
 function formatScore(score: number) {
   return score ? `${Math.round(score)}/100` : "";
+}
+
+function formatReadableValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "Not provided";
+  if (Array.isArray(value)) return value.length ? value.map(formatReadableValue).join(", ") : "None";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
+}
+
+function formatMediaKey(value: string) {
+  if (!value) return "Unknown";
+  return value
+    .replace(/^successful-/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString();
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
 }
 
 function formatStatusLabel(value: string) {
