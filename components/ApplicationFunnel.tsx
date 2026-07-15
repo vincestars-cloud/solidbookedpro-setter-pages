@@ -6,6 +6,14 @@ import type { ApplicationFields, ClientMockCallState, MediaEngagementInput, Publ
 type Props = { config: PublicConfig };
 type CallState = ClientMockCallState & { error?: string; transcript?: Array<Record<string, unknown>> };
 type ResultState = { status: QualificationStatus; message: string; calendar: PublicConfig["calendar"] | null } | null;
+const applicationSteps = [
+  "Tell us about yourself",
+  "Understand our sales process",
+  "Listen to call and role play",
+  "Final questions and schedule interview"
+];
+const stepTabs = ["Info", "Understand our sales process", "Listen to call and role play", "Final"];
+const totalSteps = applicationSteps.length;
 
 const emptyFields: Partial<ApplicationFields> = {
   fullName: "",
@@ -47,16 +55,6 @@ export function ApplicationFunnel({ config }: Props) {
   const [micGranted, setMicGranted] = useState(false);
   const [micStatus, setMicStatus] = useState("Test your microphone before starting.");
   const [micLevel, setMicLevel] = useState(0);
-  const [founderVideo, setFounderVideo] = useState<MediaEngagementInput>({
-    mediaType: "founder_video",
-    mediaKey: "founder-video",
-    started: false,
-    secondsConsumed: 0,
-    percentageConsumed: 0,
-    completed: false,
-    replayCount: 0,
-    pauseCount: 0
-  });
   const [callLibrary, setCallLibrary] = useState<MediaEngagementInput[]>(
     config.content.callRecordings.map((call) => ({
       mediaType: "call_recording",
@@ -83,7 +81,7 @@ export function ApplicationFunnel({ config }: Props) {
   const callStartedAt = useRef<number>(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const progressPercent = currentStep * 20;
+  const progressPercent = Math.round((currentStep / totalSteps) * 100);
   const tomorrow = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() + 1);
@@ -97,12 +95,11 @@ export function ApplicationFunnel({ config }: Props) {
       const parsed = JSON.parse(saved);
       if (parsed.applicantId) setApplicantId(parsed.applicantId);
       if (parsed.currentStep) {
-        setCurrentStep(parsed.currentStep);
+        setCurrentStep(Math.min(totalSteps, Math.max(1, parsed.currentStep)));
         setStarted(true);
       }
-      if (parsed.highestStep) setHighestStep(parsed.highestStep);
+      if (parsed.highestStep) setHighestStep(Math.min(totalSteps, Math.max(1, parsed.highestStep)));
       if (parsed.fields) setFields({ ...emptyFields, ...parsed.fields });
-      if (parsed.founderVideo) setFounderVideo(parsed.founderVideo);
       if (parsed.callLibrary) setCallLibrary(parsed.callLibrary);
       if (parsed.mockCalls) setMockCalls(parsed.mockCalls);
       if (Array.isArray(parsed.scenarios)) {
@@ -121,7 +118,7 @@ export function ApplicationFunnel({ config }: Props) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [fields, started, currentStep, highestStep, founderVideo, callLibrary, mockCalls, scenarios]);
+  }, [fields, started, currentStep, highestStep, callLibrary, mockCalls, scenarios]);
 
   function updateField<K extends keyof ApplicationFields>(key: K, value: ApplicationFields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -193,7 +190,6 @@ export function ApplicationFunnel({ config }: Props) {
       currentStep,
       highestStep,
       fields,
-      founderVideo,
       callLibrary,
       mockCalls,
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
@@ -278,9 +274,8 @@ export function ApplicationFunnel({ config }: Props) {
       if (!applicantId) await ensureSession();
     }
     if (step === 2 && !fields.salesProcessAcknowledged) nextErrors.salesProcessAcknowledged = "Confirm where the setter fits.";
-    if (step === 3 && !fields.founderVideoAcknowledged) nextErrors.founderVideoAcknowledged = "This acknowledgment is required.";
-    if (step === 4 && mockCalls.some((call) => call.status !== "completed")) nextErrors.mockCalls = "Complete all three mock calls.";
-    if (step === 5) {
+    if (step === 3 && mockCalls.some((call) => call.status !== "completed")) nextErrors.mockCalls = "Complete all three mock calls.";
+    if (step === 4) {
       config.content.scenarioQuestions.forEach((question) => {
         if (!String(scenarios[question.key] || "").trim()) nextErrors[question.key] = "Required.";
       });
@@ -426,7 +421,7 @@ export function ApplicationFunnel({ config }: Props) {
   }
 
   async function submit() {
-    const ok = await validateStep(5);
+    const ok = await validateStep(4);
     if (!ok || !applicantId) {
       focusValidationSummary();
       return;
@@ -437,7 +432,6 @@ export function ApplicationFunnel({ config }: Props) {
       currentStep,
       highestStep,
       fields,
-      founderVideo,
       callLibrary,
       mockCalls,
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
@@ -517,7 +511,7 @@ export function ApplicationFunnel({ config }: Props) {
 
               <nav className="application-nav" aria-label="Application navigation">
                 <ol>
-                  {["Tell us about yourself", "Understand our sales process", "Watch Founder Video", "Listen to call and role play", "Final questions and schedule interview"].map((item, index) => (
+                  {applicationSteps.map((item, index) => (
                     <li key={item}>
                       <span className="num">{index + 1}</span>
                       <span>{item}</span>
@@ -604,10 +598,13 @@ export function ApplicationFunnel({ config }: Props) {
               {!result && (
               <div className="application-card">
                 <div className="progress-panel" aria-live="polite">
-                  <div className="progress-head"><span>Step {currentStep} of 5</span><span>{progressPercent}% complete · {saveState}</span></div>
+                  <div className="progress-head"><span>Step {currentStep} of {totalSteps}</span><span>{progressPercent}% complete · {saveState}</span></div>
                   <div className="progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}><div className="progress-fill" style={{ width: `${progressPercent}%` }} /></div>
                   <div className="step-tabs">
-                    {[1, 2, 3, 4, 5].map((step) => <button key={step} className={`step-tab ${step === currentStep ? "active" : ""}`} type="button" disabled={step > highestStep} onClick={() => step <= highestStep && setCurrentStep(step)}> {step} <span>{["Info", "Understand our sales process", "Watch Founder Video", "Listen to call and role play", "Final"][step - 1]}</span></button>)}
+                    {applicationSteps.map((_, index) => {
+                      const step = index + 1;
+                      return <button key={step} className={`step-tab ${step === currentStep ? "active" : ""}`} type="button" disabled={step > highestStep} onClick={() => step <= highestStep && setCurrentStep(step)}> {step} <span>{stepTabs[index]}</span></button>;
+                    })}
                   </div>
                 </div>
 
@@ -700,8 +697,8 @@ export function ApplicationFunnel({ config }: Props) {
                         <div className="career-path-card">
                           <div className="career-path-heading">
                             <span>Career progression path</span>
-                            <strong>From Website Setter to Marketing Client Closer</strong>
-                            <p>We want you to be able to move from our low ticket Website Setter to our high ticket Marketing Client Closer.</p>
+                            <strong>From Website Setter to Lead Service Closer</strong>
+                            <p>We want you to be able to move from our low ticket Website Setter to our high ticket Lead Service Closer.</p>
                           </div>
                           <div className="comp-path" aria-label="Career progression path">
                             {[
@@ -742,24 +739,6 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 3 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Watch Founder Video.</h2></div></div>
-                      <div className="video-frame">
-                        {config.content.founderVideoUrl ? (
-                          <video controls poster={config.content.founderVideoPosterUrl} onPlay={() => updateMedia(setFounderVideo, founderVideo, { started: true, replayCount: founderVideo.started ? founderVideo.replayCount + 1 : 0 })} onPause={() => updateMedia(setFounderVideo, founderVideo, { pauseCount: (founderVideo.pauseCount || 0) + 1 })} onEnded={() => updateMedia(setFounderVideo, founderVideo, { completed: true, percentageConsumed: 100 })} onTimeUpdate={(event) => {
-                            const video = event.currentTarget;
-                            updateMedia(setFounderVideo, founderVideo, { secondsConsumed: Math.round(video.currentTime), percentageConsumed: video.duration ? Math.max(founderVideo.percentageConsumed, Math.round((video.currentTime / video.duration) * 100)) : 0 });
-                          }} src={config.content.founderVideoUrl} />
-                        ) : (
-                          <div className="video-placeholder"><div><h3>Founder video placeholder</h3><p>Add the final video URL in environment configuration.</p></div></div>
-                        )}
-                      </div>
-                      <Checkbox id="founderVideoAcknowledged" checked={Boolean(fields.founderVideoAcknowledged)} onChange={(v) => updateField("founderVideoAcknowledged", v as any)} label="I understand the role, expectations, compensation structure, and interview process explained above." error={errors.founderVideoAcknowledged} />
-                      <StepActions back={() => setCurrentStep(2)} next={() => goToStep(4)} />
-                    </section>
-                  )}
-
-                  {currentStep === 4 && (
-                    <section className="form-step active">
                       <div className="step-heading"><div><h2>Listen to call and role play.</h2><p>Review the examples if you want, then complete the three browser-based role plays.</p></div></div>
                       <div className="media-grid">
                         {config.content.callRecordings.map((call, index) => (
@@ -767,13 +746,11 @@ export function ApplicationFunnel({ config }: Props) {
                             <h3>{call.title}</h3>
                             <p>{call.description}</p>
                             <span className="media-meta">Call Duration: {call.durationLabel}</span>
-                            {call.embedUrl ? (
-                              <iframe className="audio-embed" title={call.title} src={call.embedUrl} allow="autoplay" onLoad={() => updateLibrary(index, { started: true })} />
-                            ) : call.url ? <audio controls src={call.url} onPlay={() => updateLibrary(index, { started: true, replayCount: callLibrary[index].started ? callLibrary[index].replayCount + 1 : 0 })} onTimeUpdate={(event) => {
+                            {call.url ? <audio controls src={call.url} onPlay={() => updateLibrary(index, { started: true, replayCount: callLibrary[index].started ? callLibrary[index].replayCount + 1 : 0 })} onTimeUpdate={(event) => {
                               const audio = event.currentTarget;
                               updateLibrary(index, { secondsConsumed: Math.round(audio.currentTime), percentageConsumed: audio.duration ? Math.max(callLibrary[index].percentageConsumed, Math.round((audio.currentTime / audio.duration) * 100)) : 0 });
                             }} onEnded={() => updateLibrary(index, { completed: true, percentageConsumed: 100 })} /> : <div className="notice">Audio player slot ready. Add URL in configuration.</div>}
-                            {!call.embedUrl && <p className="media-meta">{callLibrary[index].percentageConsumed}% listened</p>}
+                            <p className="media-meta">{callLibrary[index].percentageConsumed}% listened</p>
                           </article>
                         ))}
                       </div>
@@ -804,11 +781,11 @@ export function ApplicationFunnel({ config }: Props) {
                         })}
                       </div>
                       {errors.mockCalls && <p className="notice" role="alert">{errors.mockCalls}</p>}
-                      <StepActions back={() => setCurrentStep(3)} next={() => goToStep(5)} />
+                      <StepActions back={() => setCurrentStep(2)} next={() => goToStep(4)} />
                     </section>
                   )}
 
-                  {currentStep === 5 && (
+                  {currentStep === 4 && (
                     <section className="form-step active">
                       <div className="step-heading"><div><h2>Final questions and schedule interview.</h2><p>Answer in your own words.</p></div></div>
                       <div className="grid">
@@ -818,7 +795,7 @@ export function ApplicationFunnel({ config }: Props) {
                       </div>
                       <Checkbox id="accuracyConfirmation" checked={Boolean(fields.accuracyConfirmation)} onChange={(v) => updateField("accuracyConfirmation", v as any)} label="I confirm that the information and results I provided are accurate." error={errors.accuracyConfirmation} />
                       {errors.submit && <p className="notice" role="alert">{errors.submit}</p>}
-                      <div className="actions"><button className="btn btn-secondary" onClick={() => setCurrentStep(4)}>Back</button><button className="btn btn-primary" disabled={submitting} onClick={submit}>{submitting ? "Submitting..." : "Submit application"}</button></div>
+                      <div className="actions"><button className="btn btn-secondary" onClick={() => setCurrentStep(3)}>Back</button><button className="btn btn-primary" disabled={submitting} onClick={submit}>{submitting ? "Submitting..." : "Submit application"}</button></div>
                     </section>
                   )}
                 </div>
@@ -850,10 +827,6 @@ export function ApplicationFunnel({ config }: Props) {
   function updateLibrary(index: number, patch: Partial<MediaEngagementInput>) {
     setCallLibrary((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }
-}
-
-function updateMedia(setter: (value: MediaEngagementInput) => void, current: MediaEngagementInput, patch: Partial<MediaEngagementInput>) {
-  setter({ ...current, ...patch });
 }
 
 function Field({ id, label, value, onChange, error, type = "text", full = false, helper, min, onBlur, compact = false }: {

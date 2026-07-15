@@ -56,7 +56,7 @@ h1 { margin: 2px 0 0; max-width: 780px; font-size: clamp(36px, 5vw, 60px); line-
 .cover-panel, .start-card, .application-card, .result-card { border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.94); box-shadow: var(--shadow); }
 .cover-panel { padding: 20px; box-shadow: 0 12px 30px rgba(15, 23, 42, .055); }
 .application-nav { padding: 16px; border: 1px solid #cad7ff; border-radius: 16px; background: #fff; box-shadow: var(--shadow); }
-.application-nav ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0; margin: 0; list-style: none; }
+.application-nav ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 0; margin: 0; list-style: none; }
 .application-nav li { min-height: 88px; display: grid; align-content: start; justify-items: center; gap: 8px; padding: 12px 8px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafc; color: #263244; text-align: center; font-size: 13px; font-weight: 850; line-height: 1.25; }
 .application-nav-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; font-weight: 700; }
 .copy-block { display: grid; gap: 14px; }
@@ -103,7 +103,7 @@ h1 { margin: 2px 0 0; max-width: 780px; font-size: clamp(36px, 5vw, 60px); line-
 .progress-head { display: flex; justify-content: space-between; gap: 14px; color: var(--muted); font-size: 14px; font-weight: 750; }
 .progress-track { height: 10px; margin-top: 12px; border-radius: 999px; overflow: hidden; background: #e8eef7; }
 .progress-fill { height: 100%; width: 20%; background: linear-gradient(90deg, var(--primary), #13a66f); transition: width .2s ease; }
-.step-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 18px; }
+.step-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 18px; }
 .step-tab { min-height: 54px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--muted); font-weight: 800; line-height: 1.15; }
 .step-tab span { display: block; margin-top: 2px; font-size: 12px; white-space: normal; }
 .step-tab.active { color: var(--primary-dark); border-color: #b9c8ff; background: #edf2ff; }
@@ -174,11 +174,11 @@ textarea.control { min-height: 130px; resize: vertical; }
 .video-frame video { display: block; width: 100%; max-height: 68svh; aspect-ratio: 9 / 16; background: #111827; object-fit: contain; }
 .media-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .audio-card, .mock-card, .scenario-card { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 16px; }
-.audio-card { display: grid; gap: 8px; align-content: start; min-height: 220px; }
+.audio-card { display: grid; gap: 10px; align-content: start; min-height: 220px; }
 .audio-card h3, .mock-card h3 { margin-bottom: 4px; font-size: 18px; }
 .audio-card p { color: var(--muted); }
-.audio-card audio { width: 100%; margin-top: 12px; }
-.audio-embed { width: 100%; height: 132px; margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; }
+.audio-card audio { width: 100%; height: 44px; margin-top: 8px; border-radius: 10px; background: #f1f5f9; accent-color: var(--primary); }
+.audio-card .media-meta:last-child { margin-bottom: 0; }
 .media-meta, .status-line { color: var(--muted); font-size: 13px; }
 .mock-intro { padding: 18px; border-radius: 12px; border: 1px solid #f2d7a3; color: #5b3a00; background: var(--warning-soft); }
 .mic-panel { display: grid; gap: 12px; margin: 18px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
@@ -209,7 +209,7 @@ th { color: #334155; background: #f8fafc; font-size: 12px; text-transform: upper
   .application-nav-footer .btn { width: 100%; }
   .cover-start { position: static; }
   .start-card { padding: 22px; }
-  .step-tabs { grid-template-columns: repeat(5, minmax(38px, 1fr)); }
+  .step-tabs { grid-template-columns: repeat(4, minmax(38px, 1fr)); }
   .step-tab span { display: none; }
   .form-shell, .progress-panel { padding: 20px; }
   .step-heading { display: block; }

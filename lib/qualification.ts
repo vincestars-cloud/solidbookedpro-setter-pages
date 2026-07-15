@@ -21,7 +21,6 @@ export function evaluateQualification(input: QualificationInput): {
 
   if (input.duplicateSubmission) hardFlags.push("duplicate_submission");
   if (!fields.accuracyConfirmation) hardFlags.push("required_acknowledgment_missing");
-  if (!fields.founderVideoAcknowledged) hardFlags.push("founder_video_acknowledgment_missing");
   if (!input.microphoneGranted) hardFlags.push("microphone_not_confirmed");
   if (input.mockCallsCompleted < 3) hardFlags.push("mock_calls_incomplete");
   if (fields.desiredHourly > publicConfig.role.payMax) hardFlags.push("pay_expectation_above_range");
@@ -42,7 +41,6 @@ export function evaluateQualification(input: QualificationInput): {
   const blockingFlags = new Set([
     "duplicate_submission",
     "required_acknowledgment_missing",
-    "founder_video_acknowledgment_missing",
     "microphone_not_confirmed",
     "mock_calls_incomplete",
     "pay_expectation_above_range",

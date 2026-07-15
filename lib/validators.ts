@@ -36,8 +36,8 @@ export const scenarioResponseSchema = z.object({
 
 export const autosaveSchema = z.object({
   applicantId: z.string().uuid(),
-  currentStep: z.coerce.number().int().min(1).max(5),
-  highestStep: z.coerce.number().int().min(1).max(5),
+  currentStep: z.coerce.number().int().min(1).max(4),
+  highestStep: z.coerce.number().int().min(1).max(4),
   fields: applicationFieldsSchema.partial(),
   founderVideo: z.any().optional(),
   callLibrary: z.array(z.any()).optional(),
