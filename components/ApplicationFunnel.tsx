@@ -113,6 +113,7 @@ export function ApplicationFunnel({ config }: Props) {
   const validationSummaryRef = useRef<HTMLDivElement | null>(null);
   const activeVapi = useRef<any>(null);
   const activeCallNumber = useRef<1 | 2 | 3 | null>(null);
+  const callStartInProgress = useRef(false);
   const callStartedAt = useRef<number>(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -456,11 +457,31 @@ export function ApplicationFunnel({ config }: Props) {
   }
 
   async function startMockCall(mockCallNumber: 1 | 2 | 3) {
+    if (callStartInProgress.current || activeCallNumber.current) return;
+    callStartInProgress.current = true;
+    updateMock(mockCallNumber, { status: "connecting", error: "" });
+
+    const assistantId = config.vapi.assistantIds[String(mockCallNumber) as "1" | "2" | "3"];
+    if (!config.vapi.publicKey || !isUuid(assistantId)) {
+      callStartInProgress.current = false;
+      updateMock(mockCallNumber, { status: "failed", error: "This mock-call assistant is not configured correctly. Refresh and try again." });
+      track("mock_call_failed", { mockCallNumber, error: "invalid_vapi_assistant_id", assistantId: assistantId || "" });
+      return;
+    }
+
     const granted = micGranted || await requestMicrophone();
-    if (!granted) return;
-    if (activeCallNumber.current) return;
+    if (!granted) {
+      callStartInProgress.current = false;
+      updateMock(mockCallNumber, { status: "not_started" });
+      return;
+    }
+    if (activeCallNumber.current) {
+      callStartInProgress.current = false;
+      return;
+    }
     const sessionId = applicantId || await ensureSession(fields.email);
     if (!sessionId) {
+      callStartInProgress.current = false;
       updateMock(mockCallNumber, {
         status: "failed",
         error: "We could not create your application session. Check that your email is valid and refresh before trying this call again."
@@ -471,28 +492,15 @@ export function ApplicationFunnel({ config }: Props) {
       }));
       return;
     }
-    const assistantId = config.vapi.assistantIds[String(mockCallNumber) as "1" | "2" | "3"];
-    if (!config.vapi.publicKey || !assistantId) {
-      if (staticPagesMode) {
-        activeCallNumber.current = mockCallNumber;
-        callStartedAt.current = Date.now();
-        updateMock(mockCallNumber, { status: "live", error: "", startedAt: new Date().toISOString(), vapiCallId: `static_mock_${mockCallNumber}_${Date.now()}` });
-        startTimer(mockCallNumber);
-        window.setTimeout(() => completeCall(mockCallNumber, "static_pages_simulated_call"), 5000);
-        return;
-      }
-      updateMock(mockCallNumber, { status: "failed", error: "Vapi is not configured yet." });
-      return;
-    }
     try {
       const { default: Vapi } = await import("@vapi-ai/web");
       activeCallNumber.current = mockCallNumber;
       callStartedAt.current = Date.now();
-      updateMock(mockCallNumber, { status: "connecting", error: "" });
-      track("mock_call_started", { mockCallNumber });
+      track("mock_call_started", { mockCallNumber, assistantId, applicantId: sessionId });
       const vapi = new Vapi(config.vapi.publicKey);
       activeVapi.current = vapi;
       vapi.on("call-start", () => {
+        callStartInProgress.current = false;
         updateMock(mockCallNumber, { status: "live", startedAt: new Date().toISOString() });
         startTimer(mockCallNumber);
       });
@@ -523,6 +531,7 @@ export function ApplicationFunnel({ config }: Props) {
       });
       if ((call as any)?.id) updateMock(mockCallNumber, { vapiCallId: (call as any).id });
     } catch (error) {
+      callStartInProgress.current = false;
       failCall(mockCallNumber, error instanceof Error ? error.message : "The call could not start.");
     }
   }
@@ -546,6 +555,7 @@ export function ApplicationFunnel({ config }: Props) {
 
   function completeCall(mockCallNumber: 1 | 2 | 3, endedReason: string) {
     if (timer.current) clearInterval(timer.current);
+    callStartInProgress.current = false;
     activeCallNumber.current = null;
     activeVapi.current = null;
     updateMock(mockCallNumber, {
@@ -559,6 +569,7 @@ export function ApplicationFunnel({ config }: Props) {
 
   function failCall(mockCallNumber: 1 | 2 | 3, error: string) {
     if (timer.current) clearInterval(timer.current);
+    callStartInProgress.current = false;
     activeCallNumber.current = null;
     activeVapi.current = null;
     updateMock(mockCallNumber, { status: "failed", error });
@@ -1610,4 +1621,8 @@ function cleanResumeText(value: string) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 16000);
+}
+
+function isUuid(value: unknown) {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
