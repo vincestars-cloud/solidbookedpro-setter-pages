@@ -69,9 +69,13 @@ export const publicConfig: PublicConfig = {
     }
   },
   calendar: {
-    provider: process.env.CALENDAR_PROVIDER || "calendly",
-    embedUrl: process.env.NEXT_PUBLIC_INTERVIEW_CALENDAR_EMBED_URL || "",
-    externalUrl: process.env.NEXT_PUBLIC_INTERVIEW_CALENDAR_EXTERNAL_URL || ""
+    provider: process.env.CALENDAR_PROVIDER || "google_calendar",
+    embedUrl:
+      process.env.NEXT_PUBLIC_INTERVIEW_CALENDAR_EMBED_URL ||
+      "https://calendar.google.com/calendar/appointments/schedules/AcZssZ2c0u01gGhjxCaT7LyovBofGNWBAxhG5JSKa2-5LZrQc4kUX5guVGhqKhXD6N2GC4qFkVIpVwYS?gv=true",
+    externalUrl:
+      process.env.NEXT_PUBLIC_INTERVIEW_CALENDAR_EXTERNAL_URL ||
+      "https://calendar.google.com/calendar/appointments/schedules/AcZssZ2c0u01gGhjxCaT7LyovBofGNWBAxhG5JSKa2-5LZrQc4kUX5guVGhqKhXD6N2GC4qFkVIpVwYS?gv=true"
   }
 };
 
