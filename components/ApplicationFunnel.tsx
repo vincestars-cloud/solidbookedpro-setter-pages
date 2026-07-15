@@ -10,10 +10,10 @@ type ResultState = { status: QualificationStatus; message: string; calendar: Pub
 const applicationSteps = [
   "Tell us about yourself",
   "Understand our sales process",
-  "Listen to call and role play",
-  "Final questions and schedule interview"
+  "Listen to actual call and role play",
+  "See what your first day looks like & schedule phone interview"
 ];
-const stepTabs = ["Info", "Understand our sales process", "Listen to call and role play", "Final"];
+const stepTabs = ["Info", "Understand our sales process", "Listen to actual call and role play", "First day"];
 const totalSteps = applicationSteps.length;
 
 const emptyFields: Partial<ApplicationFields> = {
@@ -163,6 +163,12 @@ export function ApplicationFunnel({ config }: Props) {
       track("valid_email_entered", { email });
       return payload.applicantId;
     } catch {
+      if (staticPagesMode && setterBridgeUrl) {
+        const message = "We could not create your application session. Please check your connection and try again.";
+        setSaveState("Not saved to Supabase.");
+        setErrors((prev) => ({ ...prev, email: message }));
+        return null;
+      }
       if (!staticPagesMode) return null;
       const localId = crypto.randomUUID ? crypto.randomUUID() : `local_${Date.now()}`;
       setApplicantId(localId);
@@ -513,6 +519,11 @@ export function ApplicationFunnel({ config }: Props) {
       track("application_submitted", { status: body.status });
     } catch {
       setSubmitting(false);
+      if (staticPagesMode && setterBridgeUrl) {
+        setErrors({ submit: "We could not save your application to the backend. Please check your connection and try again before submitting." });
+        setSaveState("Not saved to Supabase.");
+        return;
+      }
       if (!staticPagesMode) {
         setErrors({ submit: "Submission failed." });
         return;
@@ -648,7 +659,7 @@ export function ApplicationFunnel({ config }: Props) {
                   <div className="path-grid">
                     <article>
                       <span>Low Ticket</span>
-                      <p>We build them a website and get them ranked online. Our model is show first then sell. So we build and prepare everything first, send it to them and if they are interested they can pay for it.</p>
+                      <p>We build them a website and get them ranked online. Our model is show first then sell. So we build and prepare everything first, send it to them and if they are interested we book an appointment with them for them to pay.</p>
                     </article>
                     <article>
                       <span>High Ticket</span>
@@ -715,6 +726,10 @@ export function ApplicationFunnel({ config }: Props) {
                   <details>
                     <summary>Do I close the sale or collect payment?</summary>
                     <p>No. Your job is to build rapport, answer approved general questions, send the correct details, and book a qualified presentation. The owner handles the complete presentation and payment.</p>
+                  </details>
+                  <details>
+                    <summary>What does your first day look like?</summary>
+                    <p>Your first day is a paid training and evaluation day: practice round, 90 minutes of live calls, coaching, another live-call round, then a same-day decision. You get paid the same day for all 3 hours of work, even if we decide not to move forward.</p>
                   </details>
                   <details>
                     <summary>What should I have ready before starting?</summary>
@@ -868,7 +883,7 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 3 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Listen to call and role play.</h2><p>Review the examples if you want, then complete the three browser-based role plays.</p></div></div>
+                      <div className="step-heading"><div><h2>Listen to actual call and role play.</h2><p>Review the examples if you want, then complete the three browser-based role plays.</p></div></div>
                       <div className="media-grid">
                         {config.content.callRecordings.map((call, index) => (
                           <article className="audio-card" key={call.key}>
@@ -921,7 +936,20 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 4 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>Final questions and schedule interview.</h2><p>Answer in your own words.</p></div></div>
+                      <div className="step-heading"><div><h2>See what your first day looks like & schedule phone interview.</h2><p>Review the paid training day, then answer the final questions in your own words.</p></div></div>
+                      <section className="first-day-card" aria-label="What your first day looks like">
+                        <p className="kicker">What your first day looks like</p>
+                        <p>Your first day is a paid training and evaluation day. Here&apos;s the schedule:</p>
+                        <ol className="first-day-list">
+                          <li><strong>Practice Round (30-45 min)</strong><span>We&apos;ll do live role play together so you get comfortable with common scenarios.</span></li>
+                          <li><strong>Live Calls (90 min)</strong><span>You&apos;ll make real calls using our script.</span></li>
+                          <li><strong>Coaching (30 min)</strong><span>We&apos;ll review your calls and give you feedback.</span></li>
+                          <li><strong>Live Calls Again (30 min)</strong><span>You&apos;ll make more calls and show us how you use the feedback.</span></li>
+                          <li><strong>Decision</strong><span>At the end of the day, we&apos;ll decide together if this is a good fit.</span></li>
+                        </ol>
+                        <p className="first-day-pay">You get paid the same day for all 3 hours of work, even if we decide not to move forward.</p>
+                        <p>If it&apos;s a good fit, we&apos;ll talk about next steps right away.</p>
+                      </section>
                       <div className="grid">
                         {config.content.scenarioQuestions.map((question) => (
                           <Textarea key={question.key} id={question.key} label={question.prompt} value={scenarios[question.key] || ""} onChange={(value) => setScenarios((prev) => ({ ...prev, [question.key]: value }))} error={renderError(question.key)} />
