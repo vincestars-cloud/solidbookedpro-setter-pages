@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { setterBridgeRequest, setterBridgeUrl } from "@/lib/clientBridge";
 import type { ApplicantRecord, MediaEngagementInput } from "@/lib/types";
 
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
+const bridgeMode = staticPagesMode && Boolean(setterBridgeUrl);
 
 type StaticSubmission = {
   applicantId: string;
@@ -76,12 +78,28 @@ export function AdminDashboard() {
     const completed = applicants.filter((a) => a.application_status === "application_completed").length;
     const qualified = applicants.filter((a) => a.qualification_status === "qualified").length;
     const review = applicants.filter((a) => a.qualification_status === "manual_review").length;
-    const calls = getStaticSubmissions().reduce((sum, item) => sum + (item.mockCalls || []).filter((call) => call.status === "completed").length, 0);
+    const calls = bridgeMode
+      ? applicants.reduce((sum, item) => sum + Number((item as any).mock_calls_completed || 0), 0)
+      : getStaticSubmissions().reduce((sum, item) => sum + (item.mockCalls || []).filter((call) => call.status === "completed").length, 0);
     return { total: applicants.length, completed, qualified, review, calls };
   }, [applicants]);
 
   async function loadApplicants(authToken = token) {
     sessionStorage.setItem("sbp_admin_token", authToken);
+    if (bridgeMode) {
+      try {
+        const body = await setterBridgeRequest<{ applicants: ApplicantRecord[] }>("admin_list", { token: authToken });
+        setApplicants(body.applicants || []);
+        setLoadMessage("Showing Supabase submissions through the SolidBooked Pro bridge.");
+        if (selected && !body.applicants?.some((applicant) => applicant.id === selected.applicant.id)) setSelected(null);
+        return;
+      } catch (error) {
+        setApplicants([]);
+        setSelected(null);
+        setLoadMessage(error instanceof Error ? error.message : "Admin bridge is unavailable.");
+        return;
+      }
+    }
     if (staticPagesMode) {
       loadStaticApplicants();
       return;
@@ -109,6 +127,16 @@ export function AdminDashboard() {
   }
 
   async function openApplicant(id: string) {
+    if (bridgeMode) {
+      try {
+        const body = await setterBridgeRequest<Bundle>("admin_detail", { token, id });
+        setSelected(body);
+        return;
+      } catch (error) {
+        setLoadMessage(error instanceof Error ? error.message : "Admin detail bridge is unavailable.");
+        return;
+      }
+    }
     if (!staticPagesMode) {
       try {
         const response = await fetch(`/api/admin/applicants/${id}`, { headers: { "x-admin-token": token } });
@@ -136,6 +164,16 @@ export function AdminDashboard() {
 
   async function updateStatus(patch: Record<string, unknown>) {
     if (!selected) return;
+    if (bridgeMode) {
+      const updated = await setterBridgeRequest("admin_status", { token, id: selected.applicant.id, patch }).then(() => true).catch((error) => {
+        setLoadMessage(error instanceof Error ? error.message : "Status update failed.");
+        return false;
+      });
+      if (!updated) return;
+      await loadApplicants();
+      await openApplicant(selected.applicant.id);
+      return;
+    }
     if (staticPagesMode) {
       const submissions = getStaticSubmissions().map((item) => {
         if (item.applicantId !== selected.applicant.id) return item;
@@ -167,6 +205,16 @@ export function AdminDashboard() {
 
   async function addNote() {
     if (!selected || !note.trim()) return;
+    if (bridgeMode) {
+      const saved = await setterBridgeRequest("admin_note", { token, id: selected.applicant.id, note: note.trim() }).then(() => true).catch((error) => {
+        setLoadMessage(error instanceof Error ? error.message : "Note could not be saved.");
+        return false;
+      });
+      if (!saved) return;
+      setNote("");
+      await openApplicant(selected.applicant.id);
+      return;
+    }
     if (staticPagesMode) {
       const submissions = getStaticSubmissions().map((item) =>
         item.applicantId === selected.applicant.id
@@ -188,11 +236,11 @@ export function AdminDashboard() {
   }
 
   function exportStatic(format: "csv" | "json") {
-    const submissions = getStaticSubmissions();
+    const submissions = bridgeMode ? [] : getStaticSubmissions();
     const fileBody =
       format === "json"
-        ? JSON.stringify(submissions, null, 2)
-        : toCsv(submissions.map(staticSubmissionToApplicant));
+        ? JSON.stringify(bridgeMode ? applicants : submissions, null, 2)
+        : toCsv(bridgeMode ? applicants : submissions.map(staticSubmissionToApplicant));
     const type = format === "json" ? "application/json" : "text/csv";
     const url = URL.createObjectURL(new Blob([fileBody], { type }));
     const anchor = document.createElement("a");
@@ -214,7 +262,7 @@ export function AdminDashboard() {
             <p>Review submissions, call activity, scenario answers, status changes, and notes from one place.</p>
           </div>
           <div className="admin-actions">
-            {!staticPagesMode && <input className="control" placeholder="Admin API token" value={token} onChange={(event) => setToken(event.target.value)} />}
+            {(!staticPagesMode || bridgeMode) && <input className="control" placeholder="Admin password" value={token} onChange={(event) => setToken(event.target.value)} />}
             <button className="btn btn-primary" onClick={() => loadApplicants()}>Refresh applicants</button>
             <button className="btn btn-secondary" onClick={() => staticPagesMode ? exportStatic("csv") : window.location.assign("/api/admin/export?format=csv")}>CSV export</button>
             <button className="btn btn-secondary" onClick={() => staticPagesMode ? exportStatic("json") : window.location.assign("/api/admin/export?format=json")}>JSON export</button>
@@ -274,7 +322,7 @@ export function AdminDashboard() {
                   <td>{truncate(applicant.appointment_setting_experience || applicant.past_metrics || "", 110)}</td>
                   <td><span className="pill">{applicant.application_status}</span></td>
                   <td><span className="pill">{applicant.qualification_status || "pending"}</span></td>
-                  <td>{getMockCallsCompleted(applicant.id)}/3</td>
+                  <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
                   <td>{applicant.interview_status}</td>
                   <td>{applicant.submitted_at ? new Date(applicant.submitted_at).toLocaleString() : ""}</td>
                   <td><button className="btn btn-secondary btn-small" onClick={() => openApplicant(applicant.id)}>Review</button></td>
@@ -282,7 +330,7 @@ export function AdminDashboard() {
               ))}
             </tbody>
           </table>
-          {!filtered.length && <div className="admin-table-empty">No applicants found yet. Complete a test submission in this same browser, then refresh this dashboard.</div>}
+          {!filtered.length && <div className="admin-table-empty">No applicants found yet. Enter the admin password, refresh, or complete a test submission from the application.</div>}
         </div>
 
         {selected && (
@@ -425,7 +473,9 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
   return { ...base, ...(submission.statusOverride || {}) };
 }
 
-function getMockCallsCompleted(applicantId: string) {
+function getMockCallsCompleted(applicantId: string, applicants: ApplicantRecord[] = []) {
+  const applicant = applicants.find((item) => item.id === applicantId) as (ApplicantRecord & { mock_calls_completed?: number }) | undefined;
+  if (applicant?.mock_calls_completed !== undefined) return Number(applicant.mock_calls_completed || 0);
   const submission = getStaticSubmissions().find((item) => item.applicantId === applicantId);
   return (submission?.mockCalls || []).filter((call) => call.status === "completed").length;
 }

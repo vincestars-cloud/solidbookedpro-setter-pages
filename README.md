@@ -1,37 +1,38 @@
 # SolidBooked Pro Setter Funnel
 
-Full-stack Next.js application for `setter.solidbookedpro.com`.
+Next.js application for `setter.solidbookedpro.com`.
 
-This is no longer a GitHub Pages-only static site. Duplicate prevention, autosave, qualification, Vapi webhook processing, and admin access require a server runtime. Deploy to Vercel or another Next.js host and point `setter.solidbookedpro.com` there.
+The production deployment can run as a GitHub Pages static export because the browser calls a Supabase RPC bridge for duplicate prevention, autosave, qualification, submission storage, and admin review. Local storage remains only a recovery layer for the applicant's current device.
 
 The Supabase integration uses app-owned table names with the `sbp_setter_` prefix by default, such as `sbp_setter_applicants`. This keeps the application isolated from any existing Supabase tables/data in the same account.
 
 ## Stack
 
 - Next.js App Router + TypeScript
-- Supabase/Postgres through server-side PostgREST calls
+- Supabase/Postgres through Next API routes or the static Pages RPC bridge
 - Zod validation
 - Vapi Web SDK for browser mock calls
 - Vapi server webhook endpoint for end-of-call reports
-- Protected admin dashboard via basic auth plus admin API token
+- Protected admin dashboard via admin password/API token
 
 ## Setup
 
 1. In Supabase SQL Editor, run `db/schema.sql`. The script is additive: it uses `create table if not exists` for `sbp_setter_*` tables and does not drop or modify unrelated tables.
-2. Copy `.env.example` to `.env.local` and fill values:
+2. For GitHub Pages/static mode, also run `db/supabase_bridge.sql` in the same isolated Supabase project.
+3. Copy `.env.example` to `.env.local` and fill values:
    - `SUPABASE_URL`: Project Settings → API → Project URL.
    - `SUPABASE_SERVICE_ROLE_KEY`: Project Settings → API → service_role key. Keep this server-side only.
    - `SUPABASE_TABLE_PREFIX`: Leave as `sbp_setter_` unless you intentionally created a different isolated prefix.
+   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Used only by static GitHub Pages mode to call `sbp_setter_bridge`.
+   - `NEXT_PUBLIC_SETTER_BRIDGE_URL`: Optional override. Defaults to `<NEXT_PUBLIC_SUPABASE_URL>/rest/v1/rpc/sbp_setter_bridge`.
    - `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_API_TOKEN` for the protected dashboard/API.
-3. Configure each Vapi assistant server URL to `/api/vapi/webhook`.
-4. Set the three public assistant IDs and public Vapi key.
-5. Set founder video, call recordings, and calendar embed URLs.
+4. Configure each Vapi assistant server URL to `/api/vapi/webhook` when running on a server host. For static Pages, route Vapi webhooks to a server workflow that updates `sbp_setter_mock_calls`.
+5. Set the three public assistant IDs and public Vapi key.
+6. Set founder video, call recordings, and calendar embed URLs.
 
 ## Deployment note
 
-GitHub Pages can host the static UI, but it cannot run the `/api/*` routes that save to Supabase. To make Supabase the source of truth for applications and the admin dashboard, deploy this Next.js app to a server runtime such as Vercel, Netlify, Render, or another Node-compatible host. Then point `setter.solidbookedpro.com` to that deployment instead of the static GitHub Pages artifact.
-
-If you keep the current GitHub Pages deployment live, applicant data is only stored in that visitor's browser local storage and will not appear centrally in Supabase.
+GitHub Pages cannot run `/api/*` routes. In `build:pages` mode, the app uses `NEXT_PUBLIC_STATIC_PAGES_MODE=1` and sends application/admin actions to the Supabase RPC bridge instead. That is what keeps duplicate checks and admin review centralized on the live static site.
 
 ## Commands
 
@@ -40,10 +41,11 @@ npm install
 npm run dev
 npm run typecheck
 npm run build
+npm run build:pages
 ```
 
 ## Notes
 
-- Qualification rules and internal scores live in server code only.
+- Qualification rules and internal scores live in server code or the Supabase bridge, not public front-end JavaScript.
 - The browser receives only `qualified`, `manual_review`, or `not_qualified`.
 - Local storage is only a convenience restore layer; Supabase is the source of truth.

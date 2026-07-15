@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { setterBridgeRequest, setterBridgeUrl } from "@/lib/clientBridge";
 import type { ApplicationFields, ClientMockCallState, MediaEngagementInput, PublicConfig, QualificationStatus } from "@/lib/types";
 
 type Props = { config: PublicConfig };
@@ -40,6 +41,8 @@ const emptyFields: Partial<ApplicationFields> = {
 const scenarioIntro =
   "You have not received our exact script, and we do not expect you to know company-specific answers. These role plays are designed to evaluate common appointment-setting skills such as communication, confidence, listening, judgment, objection handling, and asking for the next step.";
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
+const duplicateApplicationMessage =
+  "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
 
 export function ApplicationFunnel({ config }: Props) {
   const [applicantId, setApplicantId] = useState("");
@@ -131,6 +134,17 @@ export function ApplicationFunnel({ config }: Props) {
     if (!isValidEmail(email)) return null;
     if (applicantId) return applicantId;
     try {
+      if (staticPagesMode && setterBridgeUrl) {
+        const payload = await setterBridgeRequest<{ applicantId: string; duplicate?: boolean; message?: string }>("session", { email });
+        if (payload.duplicate) {
+          setDuplicateMessage(payload.message || duplicateApplicationMessage);
+          setErrors((prev) => ({ ...prev, email: payload.message || duplicateApplicationMessage }));
+          return null;
+        }
+        setApplicantId(payload.applicantId);
+        track("valid_email_entered", { email, applicantId: payload.applicantId });
+        return payload.applicantId;
+      }
       const response = await fetch("/api/applications/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,6 +164,7 @@ export function ApplicationFunnel({ config }: Props) {
       if (!staticPagesMode) return null;
       const localId = crypto.randomUUID ? crypto.randomUUID() : `local_${Date.now()}`;
       setApplicantId(localId);
+      setSaveState("Saved on this device. Supabase bridge is unavailable.");
       return localId;
     }
   }
@@ -158,6 +173,12 @@ export function ApplicationFunnel({ config }: Props) {
     const email = String(fields.email || "").trim().toLowerCase();
     if (!isValidEmail(email)) return false;
     try {
+      if (staticPagesMode && setterBridgeUrl) {
+        const payload = await setterBridgeRequest<{ exists: boolean; message?: string }>("check_email", { email, applicantId });
+        setDuplicateMessage(payload.exists ? payload.message || duplicateApplicationMessage : "");
+        if (payload.exists) setErrors((prev) => ({ ...prev, email: payload.message || duplicateApplicationMessage }));
+        return Boolean(payload.exists);
+      }
       const response = await fetch("/api/applications/check-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -171,10 +192,8 @@ export function ApplicationFunnel({ config }: Props) {
       if (!staticPagesMode) return false;
       const emails = JSON.parse(localStorage.getItem("sbp_setter_static_emails") || "[]") as string[];
       const exists = emails.includes(email);
-      const message =
-        "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
-      setDuplicateMessage(exists ? message : "");
-      if (exists) setErrors((prev) => ({ ...prev, email: message }));
+      setDuplicateMessage(exists ? duplicateApplicationMessage : "");
+      if (exists) setErrors((prev) => ({ ...prev, email: duplicateApplicationMessage }));
       return exists;
     }
   }
@@ -198,6 +217,12 @@ export function ApplicationFunnel({ config }: Props) {
     localStorage.setItem("sbp_setter_next_state", JSON.stringify(state));
     if (!applicantId) return;
     if (staticPagesMode) {
+      if (setterBridgeUrl) {
+        await setterBridgeRequest("autosave", state)
+          .then(() => setSaveState("Saved to Supabase."))
+          .catch(() => setSaveState("Saved on this device. Supabase bridge is unavailable."));
+        return;
+      }
       setSaveState("Saved on this device.");
       return;
     }
@@ -210,12 +235,18 @@ export function ApplicationFunnel({ config }: Props) {
   }
 
   async function track(eventType: string, metadata: Record<string, unknown> = {}) {
-    if (!applicantId && eventType !== "application_started") return;
-    if (staticPagesMode) return;
+    const eventApplicantId = String(metadata.applicantId || applicantId || "");
+    if (!eventApplicantId && eventType !== "application_started") return;
+    if (staticPagesMode) {
+      if (setterBridgeUrl) {
+        await setterBridgeRequest("event", { applicantId: eventApplicantId || null, eventType, step: currentStep, metadata }).catch(() => null);
+      }
+      return;
+    }
     await fetch("/api/applications/event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ applicantId, eventType, step: currentStep, metadata })
+      body: JSON.stringify({ applicantId: eventApplicantId, eventType, step: currentStep, metadata })
     }).catch(() => null);
   }
 
@@ -456,6 +487,14 @@ export function ApplicationFunnel({ config }: Props) {
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
     };
     try {
+      if (staticPagesMode && setterBridgeUrl) {
+        const body = await setterBridgeRequest<{ status: QualificationStatus; message: string; calendar: PublicConfig["calendar"] | null }>("submit", payload);
+        setSubmitting(false);
+        setResult({ status: body.status, message: body.message, calendar: body.calendar });
+        localStorage.removeItem("sbp_setter_next_state");
+        track("application_submitted", { status: body.status });
+        return;
+      }
       const response = await fetch("/api/applications/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
