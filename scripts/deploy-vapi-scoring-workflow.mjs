@@ -39,7 +39,7 @@ HOW TO RESPOND:
 - Only agree to an appointment if the applicant respectfully isolates the real issue, creates a reason to review the prepared site/solution, and asks for a specific time.
 
 TIME LIMIT:
-The role play can last up to 120 seconds. Around 105 seconds, if there is no clear next-step ask, give one final brush-off such as "I think we are probably fine for now."`
+The role play can last up to 180 seconds. Around 165 seconds, if there is no clear next-step ask, give one final brush-off such as "I think we are probably fine for now."`
   },
   "bb12a1d4-47de-4c50-b3d5-eac9c79e4995": {
     name: "SBP Mock 2 Think",
@@ -67,7 +67,7 @@ HOW TO RESPOND:
 - Only agree to an appointment if the applicant isolates the real concern and makes a clear, low-pressure ask for a specific review time.
 
 TIME LIMIT:
-The role play can last up to 120 seconds. Around 105 seconds, if there is no clear next-step ask, say: "I still think I need to sit with it."`
+The role play can last up to 180 seconds. Around 165 seconds, if there is no clear next-step ask, say: "I still think I need to sit with it."`
   },
   "93f168a7-40ba-4144-a8f7-217358b4aa0a": {
     name: "SBP Mock 3 Follow Up",
@@ -96,7 +96,7 @@ HOW TO RESPOND:
 - Only agree to an appointment if the applicant re-establishes context, isolates what is stopping you, and asks for a specific review time.
 
 TIME LIMIT:
-The role play can last up to 120 seconds. Around 105 seconds, if there is no clear next-step ask, say: "Maybe send it again and I will look when I can."`
+The role play can last up to 180 seconds. Around 165 seconds, if there is no clear next-step ask, say: "Maybe send it again and I will look when I can."`
   }
 };
 
@@ -562,7 +562,7 @@ if (vapiKey) {
           : undefined,
         serverUrl: webhookUrl,
         serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
-        maxDurationSeconds: 120,
+        maxDurationSeconds: 180,
         analysisPlan: {
           summaryPlan: { enabled: false },
           structuredDataPlan: { enabled: false }

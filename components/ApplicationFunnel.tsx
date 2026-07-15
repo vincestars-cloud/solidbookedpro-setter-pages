@@ -459,6 +459,18 @@ export function ApplicationFunnel({ config }: Props) {
     const granted = micGranted || await requestMicrophone();
     if (!granted) return;
     if (activeCallNumber.current) return;
+    const sessionId = applicantId || await ensureSession(fields.email);
+    if (!sessionId) {
+      updateMock(mockCallNumber, {
+        status: "failed",
+        error: "We could not create your application session. Check that your email is valid and refresh before trying this call again."
+      });
+      setErrors((prev) => ({
+        ...prev,
+        submit: "We could not create your application session. Check your email and refresh before trying the mock calls again."
+      }));
+      return;
+    }
     const assistantId = config.vapi.assistantIds[String(mockCallNumber) as "1" | "2" | "3"];
     if (!config.vapi.publicKey || !assistantId) {
       if (staticPagesMode) {
@@ -499,12 +511,12 @@ export function ApplicationFunnel({ config }: Props) {
       vapi.on("error", (error: Error) => failCall(mockCallNumber, error.message));
       const call = await vapi.start(assistantId, {
         variableValues: {
-          application_id: applicantId,
+          application_id: sessionId,
           preferred_name: fields.preferredName || "",
           mock_call_number: String(mockCallNumber)
         },
         metadata: {
-          application_id: applicantId,
+          application_id: sessionId,
           mock_call_number: mockCallNumber,
           source: "solidbooked-pro-setter-application"
         }
@@ -558,14 +570,21 @@ export function ApplicationFunnel({ config }: Props) {
   }
 
   async function submit() {
+    const sessionId = applicantId || await ensureSession(fields.email);
     const ok = await validateStep(4);
-    if (!ok || !applicantId) {
+    if (!ok || !sessionId) {
+      if (!sessionId) {
+        setErrors((prev) => ({
+          ...prev,
+          submit: "We could not create your application session. Please refresh the page, confirm your email, and try again."
+        }));
+      }
       focusValidationSummary();
       return;
     }
     setSubmitting(true);
     const payload = {
-      applicantId,
+      applicantId: sessionId,
       currentStep,
       highestStep,
       fields,
@@ -575,8 +594,21 @@ export function ApplicationFunnel({ config }: Props) {
     };
     try {
       if (staticPagesMode && setterBridgeUrl) {
-        await scoreApplicationWithAi(applicantId);
-        await waitForMockCallScoring(applicantId);
+        await setterBridgeRequest("autosave", {
+          applicantId: sessionId,
+          started,
+          currentStep,
+          highestStep,
+          fields,
+          location: applicantLocation,
+          callLibrary: [...callLibrary, postScheduleVideo],
+          postScheduleVideo,
+          interviewScheduled,
+          mockCalls,
+          scenarios: payload.scenarios
+        });
+        await scoreApplicationWithAi(sessionId);
+        await waitForMockCallScoring(sessionId);
         const body = await setterBridgeRequest<{ status: QualificationStatus; message: string; calendar: PublicConfig["calendar"] | null }>("submit", payload);
         setSubmitting(false);
         setResult({ status: body.status, message: body.message, calendar: body.calendar });
