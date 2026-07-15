@@ -278,13 +278,14 @@ if (transcript && hasApplicantSpeech(transcript)) {
     messages: [
       {
         role: 'system',
-        content: 'You are a strict appointment-setter hiring evaluator using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical B2B appointment setting. Score only the applicant behavior in the transcript. Do not reward mere politeness, agreeing, or generic follow-up. A trained setter should lower resistance, listen, identify the true objection under the brush-off, ask concise truth-seeking questions, respectfully challenge avoidance, and ask for a concrete appointment/review next step. Penalize accepting stalls such as "send me information", "let me think about it", "we get referrals", or "we are not interested" at face value. Penalize info-dumping, over-explaining, arguing, sounding needy, no attempt beyond the first brush-off, and ending with vague follow-up. Return only valid JSON.'
+        content: 'You are a strict appointment-setter hiring evaluator using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical B2B appointment setting. Score only the applicant behavior in the transcript. Do not reward mere politeness, agreeing, or generic follow-up. A trained setter should lower resistance, listen, identify the true objection under the brush-off, ask concise truth-seeking questions, respectfully challenge avoidance, and ask for a concrete appointment/review next step. Penalize accepting stalls such as "send me information", "let me think about it", "we get referrals", or "we are not interested" at face value. Penalize info-dumping, over-explaining, arguing, sounding needy, no attempt beyond the first brush-off, and ending with vague follow-up. If a call ends early by silence timeout, customer-ended-call, unknown, or client disconnect before the applicant handles the second objection or asks for a concrete next step, treat that as a major control/listening failure and normally score it below 45. Do not give a strong score to a short call just because the applicant sounded pleasant. Return only valid JSON.'
       },
       {
         role: 'user',
         content: JSON.stringify({
           mock_call_number: mockCallNumber,
           ended_reason: endedReason,
+          duration_seconds: duration,
           transcript,
           judging_lens: {
             source_principles: [
@@ -304,7 +305,16 @@ if (transcript && hasApplicantSpeech(transcript)) {
               'When should I follow up?',
               'Sounds good, have a nice day.',
               'Long product pitch without a question.',
-              'Arguing with the prospect instead of leading calmly.'
+              'Arguing with the prospect instead of leading calmly.',
+              'Only one applicant response followed by silence or hangup.',
+              'The applicant lets the call die after the prospect gives a second objection.'
+            ],
+            call_control_caps: [
+              'No captured applicant speech: score 0.',
+              'Applicant speech captured but no answer to the prospect follow-up/second objection: cap at 35.',
+              'Silence timeout/customer-ended/unknown under 60 seconds with no specific appointment ask: cap at 40.',
+              'No concrete appointment/review-time ask anywhere in the transcript: cap at 60.',
+              'Appointment booked without isolating the real objection: usually 45-65, not an automatic pass.'
             ]
           },
           required_json: {

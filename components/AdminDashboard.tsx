@@ -460,13 +460,13 @@ export function AdminDashboard() {
                 <th>Location</th>
                 <th>Desired pay</th>
                 <th>Application status</th>
+                <th>Call listening</th>
                 <th>Fit status</th>
                 <th>Interview status</th>
                 <th>Start date</th>
                 <th>Availability</th>
                 <th>AI score</th>
                 <th>Mock calls</th>
-                <th>Call listening</th>
                 <th>End video</th>
                 <th>Vocaroo link</th>
                 <th>Appointment setting experience</th>
@@ -481,13 +481,13 @@ export function AdminDashboard() {
                   <td>{formatApplicantLocation(applicant)}</td>
                   <td>{applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""}</td>
                   <td>{formatStatusLabel(applicant.application_status)}</td>
+                  <td>{formatPercent(getCallLibraryAveragePercent(applicant))}</td>
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
                   <td>{formatStatusLabel(applicant.interview_status || "not_displayed")}</td>
                   <td>{formatDate(applicant.earliest_start_date)}</td>
                   <td>{formatAvailability(applicant.availability_est)}</td>
                   <td>{formatScore(getApplicantScore(applicant))}</td>
                   <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
-                  <td>{formatPercent(getCallLibraryAveragePercent(applicant))}</td>
                   <td>{formatPercent(getPostScheduleVideoPercent(applicant))}</td>
                   <td>{applicant.vocaroo_url ? <a className="table-link" href={applicant.vocaroo_url} target="_blank" rel="noreferrer">Open link</a> : ""}</td>
                   <td>{truncate(applicant.appointment_setting_experience || "", 140)}</td>

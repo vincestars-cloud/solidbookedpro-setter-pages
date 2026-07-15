@@ -193,11 +193,41 @@ begin
     on conflict (applicant_id, mock_call_number)
     do update set
       vapi_call_id = coalesce(excluded.vapi_call_id, public.sbp_setter_mock_calls.vapi_call_id),
-      status = excluded.status,
-      started_at = coalesce(excluded.started_at, public.sbp_setter_mock_calls.started_at),
-      ended_at = coalesce(excluded.ended_at, public.sbp_setter_mock_calls.ended_at),
-      duration_seconds = coalesce(excluded.duration_seconds, public.sbp_setter_mock_calls.duration_seconds),
-      ended_reason = coalesce(excluded.ended_reason, public.sbp_setter_mock_calls.ended_reason),
+      status = case
+        when public.sbp_setter_mock_calls.transcript is not null
+          or public.sbp_setter_mock_calls.backend_score is not null
+          or public.sbp_setter_mock_calls.recording_url is not null
+        then public.sbp_setter_mock_calls.status
+        else excluded.status
+      end,
+      started_at = case
+        when public.sbp_setter_mock_calls.transcript is not null
+          or public.sbp_setter_mock_calls.backend_score is not null
+          or public.sbp_setter_mock_calls.recording_url is not null
+        then public.sbp_setter_mock_calls.started_at
+        else coalesce(excluded.started_at, public.sbp_setter_mock_calls.started_at)
+      end,
+      ended_at = case
+        when public.sbp_setter_mock_calls.transcript is not null
+          or public.sbp_setter_mock_calls.backend_score is not null
+          or public.sbp_setter_mock_calls.recording_url is not null
+        then public.sbp_setter_mock_calls.ended_at
+        else coalesce(excluded.ended_at, public.sbp_setter_mock_calls.ended_at)
+      end,
+      duration_seconds = case
+        when public.sbp_setter_mock_calls.transcript is not null
+          or public.sbp_setter_mock_calls.backend_score is not null
+          or public.sbp_setter_mock_calls.recording_url is not null
+        then public.sbp_setter_mock_calls.duration_seconds
+        else coalesce(excluded.duration_seconds, public.sbp_setter_mock_calls.duration_seconds)
+      end,
+      ended_reason = case
+        when public.sbp_setter_mock_calls.transcript is not null
+          or public.sbp_setter_mock_calls.backend_score is not null
+          or public.sbp_setter_mock_calls.recording_url is not null
+        then public.sbp_setter_mock_calls.ended_reason
+        else coalesce(excluded.ended_reason, public.sbp_setter_mock_calls.ended_reason)
+      end,
       updated_at = now();
   end loop;
 
