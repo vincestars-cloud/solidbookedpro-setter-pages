@@ -598,7 +598,7 @@ if (vapiKey) {
           ? {
               provider: "openai",
               model: "gpt-4o",
-              temperature: 0.1,
+              temperature: 0.3,
               messages: [{ role: "system", content: config.systemPrompt }]
             }
           : undefined,
