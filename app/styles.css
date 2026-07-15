@@ -206,6 +206,7 @@ textarea.control { min-height: 130px; resize: vertical; }
 .media-meta, .status-line { color: var(--muted); font-size: 13px; }
 .mock-intro { padding: 18px; border-radius: 12px; border: 1px solid #f2d7a3; color: #5b3a00; background: var(--warning-soft); }
 .mic-panel { display: grid; gap: 12px; margin: 18px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.retry-warning { margin: 0; padding: 10px 12px; border: 1px solid #f2d7a3; border-radius: 10px; color: #5b3a00; background: #fffaf0; font-size: 14px; }
 .meter { height: 8px; border-radius: 999px; overflow: hidden; background: #d8e0ec; }
 .meter span { display: block; height: 100%; width: 0%; background: var(--success); }
 .mock-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }

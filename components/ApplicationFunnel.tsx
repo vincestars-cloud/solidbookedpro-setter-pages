@@ -15,6 +15,11 @@ const applicationSteps = [
 ];
 const stepTabs = ["Info", "Understand our sales process", "Listen to actual call and role play", "First day"];
 const totalSteps = applicationSteps.length;
+const mockCallSetups: Record<1 | 2 | 3, string> = {
+  1: "Once you click start call, you’re going to hear a scenario from the prospect and your job is just to respond to how you would if you heard this on a call.",
+  2: "You’re about to hear a different scenario that you will hear on calls and your job is just to respond to how you would if you heard this on a call.",
+  3: "This was a prospect who told you to “Send more information” it’s been several days later and you’re following up with them, how do you now get them to agree to an appointment."
+};
 
 const emptyFields: Partial<ApplicationFields> = {
   fullName: "",
@@ -334,9 +339,6 @@ export function ApplicationFunnel({ config }: Props) {
     if (step === 2 && !fields.salesProcessAcknowledged) nextErrors.salesProcessAcknowledged = "Confirm where the setter fits.";
     if (step === 3 && mockCalls.some((call) => call.status !== "completed")) nextErrors.mockCalls = "Complete all three mock calls.";
     if (step === 4) {
-      config.content.scenarioQuestions.forEach((question) => {
-        if (!String(scenarios[question.key] || "").trim()) nextErrors[question.key] = "Required.";
-      });
       if (!fields.accuracyConfirmation) nextErrors.accuracyConfirmation = "Accuracy confirmation is required.";
     }
     setErrors(nextErrors);
@@ -729,7 +731,7 @@ export function ApplicationFunnel({ config }: Props) {
                   </details>
                   <details>
                     <summary>What does your first day look like?</summary>
-                    <p>Your first day is a paid training and evaluation day: practice round, 90 minutes of live calls, coaching, another live-call round, then a same-day decision. You get paid the same day for all 3 hours of work, even if we decide not to move forward.</p>
+                    <p>Your first day is a paid training and evaluation day: practice round, 45 minutes of live calls, coaching, another live-call round, then a same-day decision. You get paid the same day for all 2 hours of work, even if we decide not to move forward.</p>
                   </details>
                   <details>
                     <summary>What should I have ready before starting?</summary>
@@ -907,6 +909,7 @@ export function ApplicationFunnel({ config }: Props) {
                       <div className="mic-panel">
                         <strong>Microphone test</strong>
                         <p>{micStatus}</p>
+                        <p className="retry-warning">Make sure you tested your microphone and it is working. Once you start the call, it <strong><u>won’t let you retry it</u></strong>.</p>
                         <div className="meter"><span style={{ width: `${micLevel}%` }} /></div>
                         <button className="btn btn-secondary btn-small" type="button" onClick={requestMicrophone}>Test microphone</button>
                       </div>
@@ -917,7 +920,7 @@ export function ApplicationFunnel({ config }: Props) {
                           return (
                             <article className={`mock-card ${locked ? "locked" : ""} ${live ? "live" : ""}`} key={call.mockCallNumber}>
                               <h3>Mock Call {call.mockCallNumber}</h3>
-                              <p>You have introduced yourself and explained why you are calling. Continue the conversation from here.</p>
+                              <p>{mockCallSetups[call.mockCallNumber]}</p>
                               <p className="status-line">Status: {call.status.replaceAll("_", " ")}</p>
                               <div className="timer">{formatDuration(call.durationSeconds || 0)}</div>
                               {call.error && <p className="error-text" style={{ display: "block" }}>{call.error}</p>}
@@ -936,25 +939,20 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 4 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>See what your first day looks like & schedule phone interview.</h2><p>Review the paid training day, then answer the final questions in your own words.</p></div></div>
+                      <div className="step-heading"><div><h2>See what your first day looks like & schedule phone interview.</h2><p>Review the paid training day, then submit your application.</p></div></div>
                       <section className="first-day-card" aria-label="What your first day looks like">
                         <p className="kicker">What your first day looks like</p>
                         <p>Your first day is a paid training and evaluation day. Here&apos;s the schedule:</p>
                         <ol className="first-day-list">
-                          <li><strong>Practice Round (30-45 min)</strong><span>We&apos;ll do live role play together so you get comfortable with common scenarios.</span></li>
-                          <li><strong>Live Calls (90 min)</strong><span>You&apos;ll make real calls using our script.</span></li>
-                          <li><strong>Coaching (30 min)</strong><span>We&apos;ll review your calls and give you feedback.</span></li>
+                          <li><strong>Practice Round (30 min)</strong><span>We&apos;ll do live role play together so you get comfortable with common scenarios.</span></li>
+                          <li><strong>Live Calls (45 min)</strong><span>You&apos;ll make real calls using our script.</span></li>
+                          <li><strong>Coaching (15 min)</strong><span>We&apos;ll review your calls and give you feedback.</span></li>
                           <li><strong>Live Calls Again (30 min)</strong><span>You&apos;ll make more calls and show us how you use the feedback.</span></li>
                           <li><strong>Decision</strong><span>At the end of the day, we&apos;ll decide together if this is a good fit.</span></li>
                         </ol>
-                        <p className="first-day-pay">You get paid the same day for all 3 hours of work, even if we decide not to move forward.</p>
+                        <p className="first-day-pay">You get paid the same day for all 2 hours of work, even if we decide not to move forward.</p>
                         <p>If it&apos;s a good fit, we&apos;ll talk about next steps right away.</p>
                       </section>
-                      <div className="grid">
-                        {config.content.scenarioQuestions.map((question) => (
-                          <Textarea key={question.key} id={question.key} label={question.prompt} value={scenarios[question.key] || ""} onChange={(value) => setScenarios((prev) => ({ ...prev, [question.key]: value }))} error={renderError(question.key)} />
-                        ))}
-                      </div>
                       <Checkbox id="accuracyConfirmation" checked={Boolean(fields.accuracyConfirmation)} onChange={(v) => updateField("accuracyConfirmation", v as any)} label="I confirm that the information and results I provided are accurate." error={errors.accuracyConfirmation} />
                       {errors.submit && <p className="notice" role="alert">{errors.submit}</p>}
                       <div className="actions"><button className="btn btn-secondary" onClick={() => setCurrentStep(3)}>Back</button><button className="btn btn-primary" disabled={submitting} onClick={submit}>{submitting ? "Submitting..." : "Submit application"}</button></div>

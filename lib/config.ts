@@ -49,16 +49,7 @@ export const publicConfig: PublicConfig = {
         durationLabel: process.env.NEXT_PUBLIC_CALL_3_DURATION || "4:43"
       }
     ],
-    scenarioQuestions: [
-      {
-        key: "below_target_three_days",
-        prompt: "Your booking numbers have been below target for three consecutive days. What would you do?"
-      },
-      {
-        key: "send_me_information",
-        prompt: "A prospect says, “Just send me the information.” How would you respond?"
-      }
-    ]
+    scenarioQuestions: []
   },
   vapi: {
     publicKey: process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY || "66c11968-161c-4769-b85b-41ed0cf9c2b3",
