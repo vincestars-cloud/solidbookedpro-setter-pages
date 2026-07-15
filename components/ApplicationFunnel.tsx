@@ -56,7 +56,7 @@ const scenarioIntro =
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 const duplicateApplicationMessage =
   "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
-const postScheduleVideoUrl = "/media/appt_setter_0_hq.mp4";
+const postScheduleVideoUrl = "/media/appt_setter_0_final.mp4";
 const applicationAiScoreWebhook =
   process.env.NEXT_PUBLIC_SETTER_APPLICATION_AI_SCORE_WEBHOOK ||
   "https://n8n.americanlifeteam.com/webhook/solidbooked-setter-application-ai-score";
