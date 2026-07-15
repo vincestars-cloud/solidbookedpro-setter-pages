@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:pages": "GITHUB_PAGES=1 NEXT_PUBLIC_STATIC_PAGES_MODE=1 next build",
+    "build:pages": "node scripts/build-static-pages.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",

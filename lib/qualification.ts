@@ -34,7 +34,7 @@ export function evaluateQualification(input: QualificationInput): {
   }
 
   const resumeUploaded = Boolean(fields.resumeFileName || fields.resumeFileSize);
-  const resumeScore = resumeUploaded ? 10 : 0;
+  const resumeScore = resumeUploaded ? 2 : 0;
   const experienceScore = scoreExperience(fields.appointmentSettingExperience);
   const metricsScore = scoreMetrics(fields.pastMetrics);
   const crmScore = scoreCrm(fields.crmPlatforms);

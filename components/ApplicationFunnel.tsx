@@ -1465,14 +1465,48 @@ async function extractResumeText(file: File) {
     if (file.type.startsWith("image/")) return "";
     if (file.type === "text/plain") return cleanResumeText(await file.text());
     const buffer = await file.arrayBuffer();
-    const decoded = new TextDecoder("latin1").decode(buffer);
     if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      const pdfJsText = await extractPdfTextWithPdfJs(buffer).catch(() => "");
+      if (pdfJsText.trim().length >= 50) return cleanResumeText(pdfJsText);
+      const decoded = new TextDecoder("latin1").decode(buffer);
       return cleanResumeText(extractPdfLiteralText(decoded));
     }
+    const decoded = new TextDecoder("latin1").decode(buffer);
     return cleanResumeText(decoded);
   } catch {
     return "";
   }
+}
+
+type PdfJsModule = {
+  GlobalWorkerOptions?: { workerSrc?: string };
+  getDocument: (options: { data: Uint8Array; useWorkerFetch?: boolean; isEvalSupported?: boolean }) => {
+    promise: Promise<{
+      numPages: number;
+      getPage: (pageNumber: number) => Promise<{
+        getTextContent: () => Promise<{ items: Array<{ str?: string }> }>;
+      }>;
+    }>;
+  };
+};
+
+async function extractPdfTextWithPdfJs(buffer: ArrayBuffer) {
+  const version = "5.6.205";
+  const importRemote = new Function("url", "return import(url)") as (url: string) => Promise<PdfJsModule>;
+  const pdfjs = await importRemote(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.mjs`);
+  if (pdfjs.GlobalWorkerOptions) {
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.mjs`;
+  }
+  const pdf = await pdfjs
+    .getDocument({ data: new Uint8Array(buffer), useWorkerFetch: false, isEvalSupported: false })
+    .promise;
+  const pages: string[] = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((item) => item.str || "").join(" "));
+  }
+  return pages.join("\n");
 }
 
 function extractPdfLiteralText(raw: string) {

@@ -480,7 +480,7 @@ export function AdminDashboard() {
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
                   <td>{formatStatusLabel(applicant.interview_status || "not_displayed")}</td>
                   <td>{formatDate(applicant.earliest_start_date)}</td>
-                  <td>{applicant.availability_est ? `${applicant.availability_est.start}-${applicant.availability_est.end} ET` : ""}</td>
+                  <td>{formatAvailability(applicant.availability_est)}</td>
                   <td>{formatScore(getApplicantScore(applicant))}</td>
                   <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
                   <td>{applicant.vocaroo_url ? <a className="table-link" href={applicant.vocaroo_url} target="_blank" rel="noreferrer">Open link</a> : ""}</td>
@@ -532,7 +532,7 @@ export function AdminDashboard() {
                   <Answer label="Preferred name" value={selected.applicant.preferred_name} />
                   <Answer label="Desired pay" value={selected.applicant.desired_hourly_pay ? `$${selected.applicant.desired_hourly_pay}/hr` : ""} />
                   <Answer label="Location" value={formatApplicantLocation(selected.applicant)} />
-                  <Answer label="Availability" value={selected.applicant.availability_est ? `${selected.applicant.availability_est.start}-${selected.applicant.availability_est.end} ET` : ""} />
+                  <Answer label="Availability" value={formatAvailability(selected.applicant.availability_est)} />
                   <Answer label="Earliest start" value={selected.applicant.earliest_start_date} />
                   <Answer label="Vocaroo" value={selected.applicant.vocaroo_url} />
                   <ResumeAnswer
@@ -589,7 +589,7 @@ function ReadableApplicationAnswers({ applicant }: { applicant: ApplicantRecord 
         <ReadableField label="Email" value={applicant.normalized_email} />
         <ReadableField label="Location" value={formatApplicantLocation(applicant)} />
         <ReadableField label="Desired pay" value={applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""} />
-        <ReadableField label="Availability" value={applicant.availability_est ? `${applicant.availability_est.start} to ${applicant.availability_est.end} ET` : ""} />
+        <ReadableField label="Availability" value={formatAvailability(applicant.availability_est, " to ")} />
         <ReadableField label="Earliest start date" value={formatDate(applicant.earliest_start_date)} />
         <ReadableField label="Vocaroo recording" value={applicant.vocaroo_url} href={applicant.vocaroo_url || undefined} />
         <ReadableField label="Resume" value={applicant.resume_file_name || "No resume uploaded"} />
@@ -1254,6 +1254,22 @@ function formatDateTime(value?: string | null) {
   return parsed.toLocaleString();
 }
 
+function formatAvailability(value?: { start?: string; end?: string } | null, separator = " - ") {
+  if (!value?.start || !value?.end) return "";
+  return `${formatTime12Hour(value.start)}${separator}${formatTime12Hour(value.end)} ET`;
+}
+
+function formatTime12Hour(value: string) {
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return value;
+  const hours24 = Number(match[1]);
+  const minutes = match[2];
+  if (!Number.isFinite(hours24) || hours24 < 0 || hours24 > 23) return value;
+  const suffix = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${minutes} ${suffix}`;
+}
+
 function formatStatusLabel(value: string) {
   if (!value || value === "none") return "None";
   return value
@@ -1272,7 +1288,7 @@ function toCsv(applicants: ApplicantRecord[]) {
     a.normalized_email,
     formatApplicantLocation(a),
     a.desired_hourly_pay ? `$${a.desired_hourly_pay}/hr` : "",
-    a.availability_est ? `${a.availability_est.start}-${a.availability_est.end} ET` : "",
+    formatAvailability(a.availability_est),
     a.earliest_start_date || "",
     a.appointment_setting_experience || "",
     a.application_status,

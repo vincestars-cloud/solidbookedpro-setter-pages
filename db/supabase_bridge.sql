@@ -408,13 +408,15 @@ begin
     if resume_text_input ~* '(%|[0-9].*(calls|appointments|meetings|demos|quota|show rate|booked|set)|[0-9].*%)' then
       resume_score_value := resume_score_value + 2;
     end if;
-    if resume_score_value = 0 and file_name is not null then
-      resume_score_value := 2;
-    end if;
     resume_score_value := least(resume_score_value, 10);
     resume_analysis_value := jsonb_build_object(
       'textExtracted', length(trim(resume_text_input)) > 0,
       'extractedCharacters', length(trim(resume_text_input)),
+      'parserWarning', case
+        when length(trim(resume_text_input)) = 0 then 'No readable resume text was extracted from the upload.'
+        when length(trim(resume_text_input)) < 400 then 'Resume text extraction was very short; review the uploaded file manually.'
+        else null
+      end,
       'salesExperienceSignal', resume_text_lower ~ '(appointment|setter|sales development|sdr|bdr|business development|inside sales|sales representative|lead generation|prospecting)',
       'coldCallingSignal', resume_text_lower ~ '(cold call|cold-call|outbound|dialer|follow[ -]?up|objection|gatekeeper|rapport)',
       'crmSignal', resume_text_lower ~ '(crm|gohighlevel|highlevel|hubspot|salesforce|pipedrive|close\.com|calendly|apollo|outreach|salesloft)',
