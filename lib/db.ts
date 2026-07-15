@@ -77,7 +77,7 @@ export async function createApplicant(email: string, ipAddress?: string) {
       normalized_email: normalizedEmail,
       application_status: "started",
       current_step: 1,
-      interview_status: "not_scheduled",
+      interview_status: "not_displayed",
       metadata: { created_ip: ipAddress || null }
     })
   });
@@ -219,6 +219,7 @@ export async function completeSubmission(
     body: JSON.stringify({
       application_status: "application_completed",
       qualification_status: qualificationStatus,
+      interview_status: qualificationStatus === "qualified" ? "displayed" : "not_displayed",
       internal_score: internalScore,
       hard_flags: hardFlags,
       submitted_at: new Date().toISOString(),

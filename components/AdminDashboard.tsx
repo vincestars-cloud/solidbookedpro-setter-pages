@@ -15,7 +15,7 @@ const fitStatuses = [
 ];
 const pageSize = 25;
 const applicationStatuses = ["started", "step_1_complete", "step_2_complete", "step_3_complete", "mock_calls_in_progress", "application_completed", "interview_scheduled", "interview_completed", "paid_trial", "hired", "rejected", "withdrawn"];
-const interviewStatuses = ["not_scheduled", "scheduled", "completed"];
+const interviewStatuses = ["displayed", "not_displayed", "scheduled", "completed", "manual_request"];
 
 type StaticSubmission = {
   applicantId: string;
@@ -440,7 +440,7 @@ export function AdminDashboard() {
                   <td>{formatApplicantLocation(applicant)}</td>
                   <td>{applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""}</td>
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
-                  <td>{formatStatusLabel(applicant.interview_status || "not_scheduled")}</td>
+                  <td>{formatStatusLabel(applicant.interview_status || "not_displayed")}</td>
                   <td>{formatDate(applicant.earliest_start_date)}</td>
                   <td>{applicant.availability_est ? `${applicant.availability_est.start}-${applicant.availability_est.end} ET` : ""}</td>
                   <td>{formatScore(getApplicantScore(applicant))}</td>
@@ -485,7 +485,7 @@ export function AdminDashboard() {
                   </label>
                   <label>
                     <span>Interview</span>
-                    <select className="control" value={selected.applicant.interview_status || "not_scheduled"} onChange={(event) => updateStatus({ interviewStatus: event.target.value })}>
+                    <select className="control" value={selected.applicant.interview_status || "not_displayed"} onChange={(event) => updateStatus({ interviewStatus: event.target.value })}>
                       {interviewStatuses.map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
                     </select>
                   </label>
@@ -555,6 +555,8 @@ function ReadableApplicationAnswers({ applicant }: { applicant: ApplicantRecord 
         <ReadableField label="Earliest start date" value={formatDate(applicant.earliest_start_date)} />
         <ReadableField label="Vocaroo recording" value={applicant.vocaroo_url} href={applicant.vocaroo_url || undefined} />
         <ReadableField label="Resume" value={applicant.resume_file_name || "No resume uploaded"} />
+        <ReadableField label="Resume fit score" value={applicant.resume_score !== null && applicant.resume_score !== undefined ? `${applicant.resume_score}/10` : "Not scored"} />
+        <ReadableField label="Resume signals" value={formatResumeSignals(applicant.resume_analysis)} wide />
         <ReadableField label="CRM or scheduling platforms" value={applicant.crm_platforms} wide />
         <ReadableField label="Appointment setting or cold calling experience" value={applicant.appointment_setting_experience} wide />
         <ReadableField label="Industries or offers worked with" value={applicant.industries} wide />
@@ -741,6 +743,7 @@ function ReadableOperationalSummary({ applicant, events }: { applicant: Applican
 function ScoreBreakdown({ breakdown }: { breakdown: Record<string, unknown> }) {
   const rows = [
     ["Resume uploaded", readableYesNo(breakdown.resumeUploaded)],
+    ["Resume fit", `${breakdown.resumeScore || 0}/10`],
     ["Experience detail", `${breakdown.experienceScore || 0}/20`],
     ["Past metrics", `${breakdown.metricsScore || 0}/25`],
     ["CRM/platform detail", `${breakdown.crmScore || 0}/8`],
@@ -919,6 +922,8 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     resume_file_size: fields.resumeFileSize || null,
     resume_file_type: fields.resumeFileType || null,
     resume_uploaded_at: null,
+    resume_score: null,
+    resume_analysis: null,
     location_city: submission.location?.city || null,
     location_region: submission.location?.region || null,
     location_country: submission.location?.country || null,
@@ -931,7 +936,7 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     started_at: submission.updatedAt || submission.submittedAt || now,
     submitted_at: submission.submittedAt || null,
     total_completion_seconds: null,
-    interview_status: "not_scheduled",
+    interview_status: "not_displayed",
     interview_scheduled_at: null,
     interview_details: null,
     hiring_stage_status: null,
@@ -1114,6 +1119,18 @@ function formatReadableValue(value: unknown): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value);
+}
+
+function formatResumeSignals(value: Record<string, unknown> | null) {
+  if (!value) return "Not scored";
+  const signals = [
+    value.textExtracted ? `${value.extractedCharacters || 0} characters extracted` : "No readable resume text extracted",
+    value.salesExperienceSignal ? "sales/appointment experience" : "",
+    value.coldCallingSignal ? "cold calling/follow-up" : "",
+    value.crmSignal ? "CRM/tooling" : "",
+    value.metricsSignal ? "measurable resume metrics" : ""
+  ].filter(Boolean);
+  return signals.join(", ") || "No strong resume signals";
 }
 
 function readableYesNo(value: unknown) {

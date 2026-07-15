@@ -14,6 +14,8 @@ $$;
 alter table public.sbp_setter_applicants
   add column if not exists resume_file_type text,
   add column if not exists resume_uploaded_at timestamptz,
+  add column if not exists resume_score integer,
+  add column if not exists resume_analysis jsonb,
   add column if not exists location_city text,
   add column if not exists location_region text,
   add column if not exists location_country text,
@@ -26,11 +28,18 @@ create table if not exists public.sbp_setter_resume_files (
   file_type text not null,
   file_size integer not null,
   file_base64 text not null,
+  resume_text text,
+  resume_score integer,
+  resume_analysis jsonb,
   uploaded_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.sbp_setter_resume_files enable row level security;
+
+update public.sbp_setter_applicants
+set interview_status = 'not_displayed'
+where interview_status = 'not_scheduled';
 
 create or replace function public.sbp_setter_status_from_step(step_value integer)
 returns text
@@ -205,6 +214,9 @@ declare
   hard_flags_arr text[] := array[]::text[];
   score integer := 0;
   resume_uploaded boolean := false;
+  resume_text_value text := '';
+  resume_score_value integer := 0;
+  resume_analysis_value jsonb := '{}'::jsonb;
   experience_score integer := 0;
   metrics_score integer := 0;
   crm_score integer := 0;
@@ -231,8 +243,11 @@ declare
   file_type text;
   file_size integer;
   file_base64 text;
+  resume_text_input text;
+  resume_text_lower text;
   resume_row public.sbp_setter_resume_files%rowtype;
   previous_hiring_stage text;
+  previous_interview_status text;
 begin
   if action = 'health' then
     return jsonb_build_object('ok', true, 'service', 'sbp_setter_bridge');
@@ -271,7 +286,7 @@ begin
       email_norm,
       'started',
       1,
-      'not_scheduled',
+      'not_displayed',
       nullif(payload->'location'->>'city', ''),
       nullif(payload->'location'->>'region', ''),
       nullif(payload->'location'->>'country', ''),
@@ -323,6 +338,8 @@ begin
     file_type := coalesce(nullif(payload->>'fileType', ''), 'application/octet-stream');
     file_size := coalesce(nullif(payload->>'fileSize', '')::integer, 0);
     file_base64 := nullif(payload->>'fileBase64', '');
+    resume_text_input := left(coalesce(payload->>'resumeText', ''), 16000);
+    resume_text_lower := lower(resume_text_input);
 
     if applicant_uuid is null or file_name is null or file_base64 is null then
       return jsonb_build_object('ok', false, 'message', 'Resume upload is missing required data.');
@@ -340,14 +357,47 @@ begin
       return jsonb_build_object('ok', false, 'message', 'Upload a PDF, DOC, DOCX, PNG, or JPG resume.');
     end if;
 
-    insert into public.sbp_setter_resume_files (applicant_id, file_name, file_type, file_size, file_base64, uploaded_at, updated_at)
-    values (applicant_uuid, file_name, file_type, file_size, file_base64, now(), now())
+    resume_score_value := 0;
+    if length(trim(resume_text_input)) >= 400 then
+      resume_score_value := resume_score_value + 2;
+    end if;
+    if resume_text_lower ~ '(appointment|setter|sales development|sdr|bdr|business development|inside sales|sales representative|lead generation|prospecting)' then
+      resume_score_value := resume_score_value + 3;
+    end if;
+    if resume_text_lower ~ '(cold call|cold-call|outbound|dialer|follow[ -]?up|objection|gatekeeper|rapport)' then
+      resume_score_value := resume_score_value + 2;
+    end if;
+    if resume_text_lower ~ '(crm|gohighlevel|highlevel|hubspot|salesforce|pipedrive|close\.com|calendly|apollo|outreach|salesloft)' then
+      resume_score_value := resume_score_value + 1;
+    end if;
+    if resume_text_input ~* '(%|[0-9].*(calls|appointments|meetings|demos|quota|show rate|booked|set)|[0-9].*%)' then
+      resume_score_value := resume_score_value + 2;
+    end if;
+    if resume_score_value = 0 and file_name is not null then
+      resume_score_value := 2;
+    end if;
+    resume_score_value := least(resume_score_value, 10);
+    resume_analysis_value := jsonb_build_object(
+      'textExtracted', length(trim(resume_text_input)) > 0,
+      'extractedCharacters', length(trim(resume_text_input)),
+      'salesExperienceSignal', resume_text_lower ~ '(appointment|setter|sales development|sdr|bdr|business development|inside sales|sales representative|lead generation|prospecting)',
+      'coldCallingSignal', resume_text_lower ~ '(cold call|cold-call|outbound|dialer|follow[ -]?up|objection|gatekeeper|rapport)',
+      'crmSignal', resume_text_lower ~ '(crm|gohighlevel|highlevel|hubspot|salesforce|pipedrive|close\.com|calendly|apollo|outreach|salesloft)',
+      'metricsSignal', resume_text_input ~* '(%|[0-9].*(calls|appointments|meetings|demos|quota|show rate|booked|set)|[0-9].*%)',
+      'score', resume_score_value
+    );
+
+    insert into public.sbp_setter_resume_files (applicant_id, file_name, file_type, file_size, file_base64, resume_text, resume_score, resume_analysis, uploaded_at, updated_at)
+    values (applicant_uuid, file_name, file_type, file_size, file_base64, nullif(resume_text_input, ''), resume_score_value, resume_analysis_value, now(), now())
     on conflict (applicant_id)
     do update set
       file_name = excluded.file_name,
       file_type = excluded.file_type,
       file_size = excluded.file_size,
       file_base64 = excluded.file_base64,
+      resume_text = excluded.resume_text,
+      resume_score = excluded.resume_score,
+      resume_analysis = excluded.resume_analysis,
       updated_at = now()
     returning * into resume_row;
 
@@ -357,17 +407,21 @@ begin
       resume_file_size = file_size,
       resume_file_type = file_type,
       resume_uploaded_at = resume_row.updated_at,
+      resume_score = resume_score_value,
+      resume_analysis = resume_analysis_value,
       updated_at = now()
     where id = applicant_uuid;
 
     insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
-    values (applicant_uuid, 'resume_uploaded', jsonb_build_object('fileName', file_name, 'fileType', file_type, 'fileSize', file_size));
+    values (applicant_uuid, 'resume_uploaded', jsonb_build_object('fileName', file_name, 'fileType', file_type, 'fileSize', file_size, 'resumeScore', resume_score_value, 'resumeAnalysis', resume_analysis_value));
 
     return jsonb_build_object('ok', true, 'resume', jsonb_build_object(
       'fileName', file_name,
       'fileType', file_type,
       'fileSize', file_size,
-      'uploadedAt', resume_row.updated_at
+      'uploadedAt', resume_row.updated_at,
+      'resumeScore', resume_score_value,
+      'resumeAnalysis', resume_analysis_value
     ));
   end if;
 
@@ -402,6 +456,14 @@ begin
       where applicant_id = applicant_uuid
     ) or nullif(fields->>'resumeFileName', '') is not null
     into resume_uploaded;
+
+    select
+      coalesce(a.resume_score, r.resume_score, case when resume_uploaded then 2 else 0 end),
+      coalesce(a.resume_analysis, r.resume_analysis, '{}'::jsonb)
+    into resume_score_value, resume_analysis_value
+    from public.sbp_setter_applicants a
+    left join public.sbp_setter_resume_files r on r.applicant_id = a.id
+    where a.id = applicant_uuid;
 
     select
       coalesce(count(*) filter (
@@ -473,9 +535,7 @@ begin
       hard_flags_arr := array_append(hard_flags_arr, 'availability_outside_required_window');
     end if;
 
-    if resume_uploaded then
-      score := score + 10;
-    end if;
+    resume_score_value := case when resume_uploaded then least(coalesce(resume_score_value, 2), 10) else 0 end;
 
     if length(trim(coalesce(fields->>'appointmentSettingExperience', ''))) >= 300 then
       experience_score := experience_score + 10;
@@ -535,6 +595,7 @@ begin
     end if;
 
     score := score
+      + resume_score_value
       + experience_score
       + metrics_score
       + crm_score
@@ -544,7 +605,8 @@ begin
 
     score_breakdown := jsonb_build_object(
       'resumeUploaded', resume_uploaded,
-      'resumeScore', case when resume_uploaded then 10 else 0 end,
+      'resumeScore', resume_score_value,
+      'resumeAnalysis', resume_analysis_value,
       'experienceScore', experience_score,
       'metricsScore', metrics_score,
       'crmScore', crm_score,
@@ -570,6 +632,7 @@ begin
     set
       application_status = 'application_completed',
       qualification_status = result_status,
+      interview_status = case when result_status = 'qualified' then 'displayed' else 'not_displayed' end,
       internal_score = score,
       hard_flags = hard_flags_arr,
       submitted_at = now(),
@@ -655,6 +718,8 @@ begin
         'fileType', resume_row.file_type,
         'fileSize', resume_row.file_size,
         'fileBase64', resume_row.file_base64,
+        'resumeScore', resume_row.resume_score,
+        'resumeAnalysis', resume_row.resume_analysis,
         'uploadedAt', resume_row.updated_at
       )
     );
@@ -663,7 +728,10 @@ begin
   if action = 'admin_status' then
     applicant_uuid := nullif(payload->>'id', '')::uuid;
     patch := coalesce(payload->'patch', '{}'::jsonb);
-    select hiring_stage_status into previous_hiring_stage from public.sbp_setter_applicants where id = applicant_uuid;
+    select hiring_stage_status, interview_status
+    into previous_hiring_stage, previous_interview_status
+    from public.sbp_setter_applicants
+    where id = applicant_uuid;
     update public.sbp_setter_applicants
     set
       qualification_status = case
@@ -702,6 +770,21 @@ begin
           'email', applicant.normalized_email,
           'name', applicant.full_name,
           'source', 'admin_bad_fit_status'
+        )
+      );
+    end if;
+    if patch ? 'interviewStatus'
+      and patch->>'interviewStatus' = 'manual_request'
+      and coalesce(previous_interview_status, '') <> 'manual_request' then
+      insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
+      values (
+        applicant_uuid,
+        'manual_interview_email_requested',
+        jsonb_build_object(
+          'email', applicant.normalized_email,
+          'name', applicant.full_name,
+          'calendarUrl', 'https://calendar.app.google/gbRS4eD65Qw1W8bo8',
+          'source', 'admin_manual_request'
         )
       );
     end if;

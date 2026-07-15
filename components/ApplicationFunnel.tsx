@@ -619,14 +619,15 @@ export function ApplicationFunnel({ config }: Props) {
     setResumeUploadState("Uploading resume...");
     setErrors((prev) => ({ ...prev, resumeFileName: "" }));
     try {
-      const fileBase64 = await fileToBase64(file);
+      const [fileBase64, resumeText] = await Promise.all([fileToBase64(file), extractResumeText(file)]);
       if (setterBridgeUrl) {
         await setterBridgeRequest("resume_upload", {
           applicantId: sessionId,
           fileName: file.name,
           fileType: file.type,
           fileSize: file.size,
-          fileBase64
+          fileBase64,
+          resumeText
         });
         setResumeUploadState("Resume uploaded.");
       } else {
@@ -1283,4 +1284,50 @@ function fileToBase64(file: File) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+async function extractResumeText(file: File) {
+  try {
+    if (file.type.startsWith("image/")) return "";
+    if (file.type === "text/plain") return cleanResumeText(await file.text());
+    const buffer = await file.arrayBuffer();
+    const decoded = new TextDecoder("latin1").decode(buffer);
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      return cleanResumeText(extractPdfLiteralText(decoded));
+    }
+    return cleanResumeText(decoded);
+  } catch {
+    return "";
+  }
+}
+
+function extractPdfLiteralText(raw: string) {
+  const pieces: string[] = [];
+  const literalMatches = raw.matchAll(/\((?:\\.|[^\\)]){2,}\)\s*Tj/g);
+  for (const match of literalMatches) pieces.push(decodePdfLiteral(match[0].replace(/\)\s*Tj$/, "").slice(1)));
+  const arrayMatches = raw.matchAll(/\[((?:\s*\((?:\\.|[^\\)]){1,}\)\s*){2,})\]\s*TJ/g);
+  for (const match of arrayMatches) {
+    for (const inner of match[1].matchAll(/\((?:\\.|[^\\)]){1,}\)/g)) {
+      pieces.push(decodePdfLiteral(inner[0].slice(1, -1)));
+    }
+  }
+  return pieces.join(" ");
+}
+
+function decodePdfLiteral(value: string) {
+  return value
+    .replace(/\\n/g, " ")
+    .replace(/\\r/g, " ")
+    .replace(/\\t/g, " ")
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/\\\\/g, "\\");
+}
+
+function cleanResumeText(value: string) {
+  return value
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 16000);
 }

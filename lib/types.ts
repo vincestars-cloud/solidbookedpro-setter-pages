@@ -14,7 +14,7 @@ export type ApplicationStatus =
   | "rejected"
   | "withdrawn";
 
-export type InterviewStatus = "not_scheduled" | "scheduled" | "completed";
+export type InterviewStatus = "displayed" | "not_displayed" | "scheduled" | "completed" | "manual_request";
 
 export type MockCallStatus = "not_started" | "connecting" | "live" | "ending" | "completed" | "failed";
 
@@ -36,6 +36,8 @@ export type ApplicantRecord = {
   resume_file_size: number | null;
   resume_file_type: string | null;
   resume_uploaded_at: string | null;
+  resume_score: number | null;
+  resume_analysis: Record<string, unknown> | null;
   location_city: string | null;
   location_region: string | null;
   location_country: string | null;
