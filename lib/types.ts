@@ -101,7 +101,7 @@ export type ClientApplicationState = {
 };
 
 export type MediaEngagementInput = {
-  mediaType: "founder_video" | "call_recording";
+  mediaType: "founder_video" | "call_recording" | "post_schedule_video";
   mediaKey: string;
   started: boolean;
   secondsConsumed: number;

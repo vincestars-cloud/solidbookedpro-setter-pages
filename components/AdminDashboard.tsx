@@ -568,14 +568,42 @@ function ReadableApplicationAnswers({ applicant }: { applicant: ApplicantRecord 
 
 function ReadableEngagement({ media }: { media: Array<Record<string, unknown>> }) {
   const callRecordings = media.filter((item) => String(item.media_type || item.mediaType || "") === "call_recording");
+  const postScheduleVideos = media.filter((item) => String(item.media_type || item.mediaType || "") === "post_schedule_video");
   return (
     <section className="review-section">
       <div className="review-section-head">
         <div>
-          <h3>Call-library listening</h3>
-          <p>Optional sample-call engagement before the role plays.</p>
+          <h3>Media engagement</h3>
+          <p>Sample-call listening and post-scheduling video watch activity.</p>
         </div>
       </div>
+      <div className="engagement-subsection">
+        <h4>Post-scheduling video</h4>
+        {postScheduleVideos.length ? (
+          <div className="compact-list">
+            {postScheduleVideos.map((item, index) => {
+              const percent = Number(item.percentage_consumed || item.percentageConsumed || 0);
+              const seconds = Number(item.seconds_consumed || item.secondsConsumed || 0);
+              const pauseCount = Number(item.pause_count || item.pauseCount || 0);
+              const replayCount = Number(item.replay_count || item.replayCount || 0);
+              const completed = Boolean(item.completed);
+              return (
+                <div className="compact-row" key={String(item.id || item.media_key || item.mediaKey || index)}>
+                  <div>
+                    <strong>{formatMediaKey(String(item.media_key || item.mediaKey || "Post-scheduling video"))}</strong>
+                    <span>{seconds ? `${formatDuration(seconds)} watched` : "Not watched yet"} · {completed ? "Completed" : "Not completed"} · {pauseCount} pauses · {replayCount} replays</span>
+                  </div>
+                  <span className="pill">{percent ? `${percent}%` : "0%"}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="empty-text">No post-scheduling video watch activity saved yet.</p>
+        )}
+      </div>
+      <div className="engagement-subsection">
+        <h4>Call-library listening</h4>
       {callRecordings.length ? (
         <div className="compact-list">
           {callRecordings.map((item, index) => {
@@ -595,6 +623,7 @@ function ReadableEngagement({ media }: { media: Array<Record<string, unknown>> }
       ) : (
         <p className="empty-text">No sample-call engagement saved yet.</p>
       )}
+      </div>
     </section>
   );
 }

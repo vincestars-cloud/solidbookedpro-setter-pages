@@ -725,6 +725,26 @@ begin
     );
   end if;
 
+  if action = 'interview_scheduled' then
+    applicant_uuid := nullif(payload->>'applicantId', '')::uuid;
+    select * into applicant from public.sbp_setter_applicants where id = applicant_uuid;
+    if not found or applicant.qualification_status <> 'qualified' then
+      return jsonb_build_object('ok', false, 'message', 'Interview scheduling is not available for this application.');
+    end if;
+    update public.sbp_setter_applicants
+    set
+      application_status = 'interview_scheduled',
+      interview_status = 'scheduled',
+      interview_scheduled_at = now(),
+      interview_details = coalesce(payload->'details', '{}'::jsonb),
+      updated_at = now()
+    where id = applicant_uuid
+    returning * into applicant;
+    insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
+    values (applicant_uuid, 'interview_booked', coalesce(payload->'details', '{}'::jsonb));
+    return jsonb_build_object('ok', true, 'applicant', to_jsonb(applicant));
+  end if;
+
   if action = 'admin_status' then
     applicant_uuid := nullif(payload->>'id', '')::uuid;
     patch := coalesce(payload->'patch', '{}'::jsonb);

@@ -56,6 +56,17 @@ const scenarioIntro =
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 const duplicateApplicationMessage =
   "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
+const postScheduleVideoUrl = "/media/appt_setter_0_v3.mp4";
+const initialPostScheduleVideo: MediaEngagementInput = {
+  mediaType: "post_schedule_video",
+  mediaKey: "appt_setter_0",
+  started: false,
+  secondsConsumed: 0,
+  percentageConsumed: 0,
+  completed: false,
+  replayCount: 0,
+  pauseCount: 0
+};
 
 export function ApplicationFunnel({ config }: Props) {
   const [applicantId, setApplicantId] = useState("");
@@ -68,6 +79,9 @@ export function ApplicationFunnel({ config }: Props) {
   const [saveState, setSaveState] = useState("Not saved yet.");
   const [resumeUploadState, setResumeUploadState] = useState("");
   const [result, setResult] = useState<ResultState>(null);
+  const [interviewScheduled, setInterviewScheduled] = useState(false);
+  const [interviewScheduleState, setInterviewScheduleState] = useState("");
+  const [postScheduleVideo, setPostScheduleVideo] = useState<MediaEngagementInput>(initialPostScheduleVideo);
   const [applicantLocation, setApplicantLocation] = useState<ApplicantLocation | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [micGranted, setMicGranted] = useState(false);
@@ -120,7 +134,15 @@ export function ApplicationFunnel({ config }: Props) {
       if (parsed.highestStep) setHighestStep(Math.min(totalSteps, Math.max(1, parsed.highestStep)));
       if (parsed.fields) setFields({ ...emptyFields, ...parsed.fields });
       if (parsed.location) setApplicantLocation(parsed.location);
-      if (parsed.callLibrary) setCallLibrary(parsed.callLibrary);
+      if (parsed.callLibrary) {
+        const savedMedia = Array.isArray(parsed.callLibrary) ? parsed.callLibrary : [];
+        const savedCalls = savedMedia.filter((item: MediaEngagementInput) => item.mediaType === "call_recording");
+        const savedPostVideo = savedMedia.find((item: MediaEngagementInput) => item.mediaType === "post_schedule_video");
+        if (savedCalls.length) setCallLibrary(savedCalls);
+        if (savedPostVideo) setPostScheduleVideo({ ...initialPostScheduleVideo, ...savedPostVideo });
+      }
+      if (parsed.postScheduleVideo) setPostScheduleVideo({ ...initialPostScheduleVideo, ...parsed.postScheduleVideo });
+      if (typeof parsed.interviewScheduled === "boolean") setInterviewScheduled(parsed.interviewScheduled);
       if (parsed.mockCalls) setMockCalls(parsed.mockCalls);
       if (Array.isArray(parsed.scenarios)) {
         setScenarios(Object.fromEntries(parsed.scenarios.map((item: { questionKey: string; response: string }) => [item.questionKey, item.response])));
@@ -151,7 +173,7 @@ export function ApplicationFunnel({ config }: Props) {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [fields, started, currentStep, highestStep, callLibrary, mockCalls, scenarios, applicantLocation]);
+  }, [fields, started, currentStep, highestStep, callLibrary, postScheduleVideo, interviewScheduled, mockCalls, scenarios, applicantLocation]);
 
   function updateField<K extends keyof ApplicationFields>(key: K, value: ApplicationFields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -246,7 +268,9 @@ export function ApplicationFunnel({ config }: Props) {
       highestStep,
       fields,
       location: applicantLocation,
-      callLibrary,
+      callLibrary: [...callLibrary, postScheduleVideo],
+      postScheduleVideo,
+      interviewScheduled,
       mockCalls,
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
     };
@@ -314,7 +338,9 @@ export function ApplicationFunnel({ config }: Props) {
       highestStep,
       fields,
       location: applicantLocation,
-      callLibrary,
+      callLibrary: [...callLibrary, postScheduleVideo],
+      postScheduleVideo,
+      interviewScheduled,
       mockCalls,
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
     };
@@ -565,6 +591,37 @@ export function ApplicationFunnel({ config }: Props) {
         calendar: null
       });
       localStorage.removeItem("sbp_setter_next_state");
+    }
+  }
+
+  async function confirmInterviewScheduled() {
+    if (!applicantId) {
+      setInterviewScheduleState("We could not find your application session. Refresh and try again.");
+      return;
+    }
+    setInterviewScheduleState("Saving your interview status...");
+    const details = {
+      provider: result?.calendar?.provider || config.calendar.provider,
+      calendarUrl: result?.calendar?.externalUrl || result?.calendar?.embedUrl || config.calendar.externalUrl,
+      confirmedByApplicant: true,
+      confirmedAt: new Date().toISOString()
+    };
+    try {
+      if (staticPagesMode && setterBridgeUrl) {
+        await setterBridgeRequest("interview_scheduled", { applicantId, details });
+      } else {
+        const response = await fetch("/api/applications/interview-scheduled", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ applicantId, provider: details.provider, details })
+        });
+        if (!response.ok) throw new Error("Interview scheduling could not be saved.");
+      }
+      setInterviewScheduled(true);
+      setInterviewScheduleState("Interview marked as scheduled. Watch the video below before your call.");
+      track("interview_booked", details);
+    } catch {
+      setInterviewScheduleState("We could not save that yet. Please try again after booking your interview.");
     }
   }
 
@@ -1017,6 +1074,23 @@ export function ApplicationFunnel({ config }: Props) {
                   <h2>Congratulations — based on your application, you seem to be a strong potential fit for the role.</h2>
                   {result.calendar?.embedUrl ? <iframe className="calendar-frame" title="Schedule your interview" src={result.calendar.embedUrl} onLoad={() => track("calendar_viewed")} /> : <div className="notice">Interview calendar is ready to connect. Add the provider embed URL in configuration.</div>}
                   {result.calendar?.externalUrl && <a className="btn btn-primary" href={result.calendar.externalUrl} target="_blank" rel="noreferrer">Open interview calendar</a>}
+                  <div className="post-schedule-confirm">
+                    <div>
+                      <strong>After you schedule your interview</strong>
+                      <p>Confirm your interview is booked, then watch the short prep video before your call.</p>
+                    </div>
+                    <button className="btn btn-success" type="button" onClick={confirmInterviewScheduled} disabled={interviewScheduled}>
+                      {interviewScheduled ? "Interview scheduled" : "I scheduled my interview"}
+                    </button>
+                  </div>
+                  {interviewScheduleState && <p className="status-line post-schedule-status">{interviewScheduleState}</p>}
+                  {interviewScheduled && (
+                    <PostScheduleVideoPlayer
+                      src={postScheduleVideoUrl}
+                      engagement={postScheduleVideo}
+                      onEngagement={(patch) => setPostScheduleVideo((prev) => ({ ...prev, ...patch }))}
+                    />
+                  )}
                 </>
               ) : (
                 <>
@@ -1036,6 +1110,73 @@ export function ApplicationFunnel({ config }: Props) {
   function updateLibrary(index: number, patch: Partial<MediaEngagementInput>) {
     setCallLibrary((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
   }
+}
+
+function PostScheduleVideoPlayer({
+  src,
+  engagement,
+  onEngagement
+}: {
+  src: string;
+  engagement: MediaEngagementInput;
+  onEngagement: (patch: Partial<MediaEngagementInput>) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastTrackedSecond = useRef(0);
+  const [duration, setDuration] = useState(0);
+  const [loadError, setLoadError] = useState("");
+
+  function trackProgress(time: number, total: number) {
+    if (!total || !Number.isFinite(total)) return;
+    const roundedSecond = Math.round(time);
+    if (roundedSecond - lastTrackedSecond.current < 5 && roundedSecond !== Math.round(total)) return;
+    lastTrackedSecond.current = roundedSecond;
+    onEngagement({
+      secondsConsumed: Math.max(engagement.secondsConsumed, roundedSecond),
+      percentageConsumed: Math.max(engagement.percentageConsumed, Math.round((time / total) * 100))
+    });
+  }
+
+  return (
+    <section className="post-schedule-video" aria-label="Interview preparation video">
+      <div className="post-schedule-video-copy">
+        <span className="kicker">Before your interview</span>
+        <h3>Watch this prep video.</h3>
+        <p>This will help you understand what to expect before the phone interview.</p>
+      </div>
+      <div className="video-frame post-video-frame">
+        <video
+          ref={videoRef}
+          controls
+          playsInline
+          preload="metadata"
+          src={src}
+          onLoadedMetadata={(event) => {
+            setDuration(event.currentTarget.duration || 0);
+            setLoadError("");
+          }}
+          onPlay={(event) => {
+            const isReplay = engagement.started && event.currentTarget.currentTime < 1;
+            onEngagement({ started: true, replayCount: isReplay ? engagement.replayCount + 1 : engagement.replayCount });
+          }}
+          onPause={(event) => {
+            if (!event.currentTarget.ended) {
+              onEngagement({ pauseCount: (engagement.pauseCount || 0) + 1 });
+            }
+            trackProgress(event.currentTarget.currentTime, event.currentTarget.duration);
+          }}
+          onTimeUpdate={(event) => trackProgress(event.currentTarget.currentTime, event.currentTarget.duration)}
+          onEnded={() => onEngagement({ completed: true, percentageConsumed: 100, secondsConsumed: Math.round(duration), replayCount: engagement.replayCount })}
+          onError={() => setLoadError("The video is having trouble loading. Try refreshing the page or opening it in a new tab.")}
+        />
+      </div>
+      <div className="post-video-meta" aria-live="polite">
+        <span>{engagement.percentageConsumed || 0}% watched</span>
+        <span>{formatDuration(engagement.secondsConsumed || 0)} watched</span>
+      </div>
+      {loadError && <p className="player-error">{loadError} <a href={src} target="_blank" rel="noreferrer">Open video</a></p>}
+    </section>
+  );
 }
 
 function CallRecordingPlayer({
