@@ -439,6 +439,7 @@ if (vapiKey) {
       body: JSON.stringify({
         serverUrl: webhookUrl,
         serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
+        maxDurationSeconds: 90,
         analysisPlan: {
           summaryPlan: { enabled: false },
           structuredDataPlan: { enabled: false }

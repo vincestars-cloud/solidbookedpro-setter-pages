@@ -617,7 +617,23 @@ export function ApplicationFunnel({ config }: Props) {
     if (!setterBridgeUrl || completed < 3) return;
     const deadline = Date.now() + 10000;
     while (Date.now() < deadline) {
-      const status = await setterBridgeRequest<{ scoredCalls?: number }>("mock_call_status", { applicantId: currentApplicantId }).catch(() => null);
+      const status = await setterBridgeRequest<{ scoredCalls?: number; noApplicantSpeechCalls?: number[] }>("mock_call_status", { applicantId: currentApplicantId }).catch(() => null);
+      const noApplicantSpeechCalls = Array.isArray(status?.noApplicantSpeechCalls) ? status.noApplicantSpeechCalls : [];
+      if (noApplicantSpeechCalls.length) {
+        const invalidNumbers = new Set(noApplicantSpeechCalls.map(Number));
+        setMockCalls((prev) =>
+          prev.map((call) =>
+            invalidNumbers.has(call.mockCallNumber)
+              ? {
+                  ...call,
+                  status: "failed",
+                  error: "We could not capture your response on this call. Test your microphone, then retry this mock call."
+                }
+              : call
+          )
+        );
+        throw new Error("One or more mock calls did not capture your response. Go back to the mock-call step, test your microphone, and retry the highlighted call.");
+      }
       if (Number(status?.scoredCalls || 0) >= 3) return;
       await new Promise((resolve) => window.setTimeout(resolve, 1500));
     }

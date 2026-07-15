@@ -363,7 +363,15 @@ begin
       'applicantId', applicant_uuid,
       'completedCalls', completed_calls,
       'scoredCalls', mock_scored_calls,
-      'mockAverageScore', round(mock_average_score)::integer
+      'mockAverageScore', round(mock_average_score)::integer,
+      'noApplicantSpeechCalls', coalesce((
+        select jsonb_agg(mock_call_number order by mock_call_number)
+        from public.sbp_setter_mock_calls
+        where applicant_id = applicant_uuid
+          and status = 'completed'
+          and backend_score is not null
+          and coalesce(transcript, '') !~* '(^|\n)\s*Applicant\s*:'
+      ), '[]'::jsonb)
     );
   end if;
 
