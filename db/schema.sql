@@ -20,6 +20,9 @@ create table if not exists sbp_setter_applicants (
   resume_uploaded_at timestamptz,
   resume_score integer,
   resume_analysis jsonb,
+  ai_application_score integer,
+  ai_application_analysis jsonb,
+  ai_scored_at timestamptz,
   location_city text,
   location_region text,
   location_country text,
@@ -55,6 +58,9 @@ alter table sbp_setter_applicants
   add column if not exists resume_uploaded_at timestamptz,
   add column if not exists resume_score integer,
   add column if not exists resume_analysis jsonb,
+  add column if not exists ai_application_score integer,
+  add column if not exists ai_application_analysis jsonb,
+  add column if not exists ai_scored_at timestamptz,
   add column if not exists location_city text,
   add column if not exists location_region text,
   add column if not exists location_country text,
@@ -73,6 +79,13 @@ create table if not exists sbp_setter_resume_files (
   uploaded_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table sbp_setter_resume_files
+  add column if not exists resume_text text,
+  add column if not exists resume_score integer,
+  add column if not exists resume_analysis jsonb,
+  add column if not exists uploaded_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
 
 create table if not exists sbp_setter_application_events (
   id uuid primary key default gen_random_uuid(),

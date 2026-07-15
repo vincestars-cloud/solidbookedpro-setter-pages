@@ -7,6 +7,10 @@ import type { ApplicantRecord, MediaEngagementInput } from "@/lib/types";
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 const bridgeMode = staticPagesMode && Boolean(setterBridgeUrl);
 const adminTokenStorageKey = "sbp_admin_token";
+const setterOutboundEmailWebhook =
+  process.env.NEXT_PUBLIC_SETTER_OUTBOUND_EMAIL_WEBHOOK ||
+  "https://n8n.americanlifeteam.com/webhook/solidbooked-setter-outbound-email";
+const manualInterviewCalendarUrl = "https://calendar.app.google/gbRS4eD65Qw1W8bo8";
 const fitStatuses = [
   { value: "", label: "No fit status" },
   { value: "a_player", label: "A-Player" },
@@ -242,12 +246,14 @@ export function AdminDashboard() {
 
   async function updateStatus(patch: Record<string, unknown>) {
     if (!selected) return;
+    const previousApplicant = selected.applicant;
     if (bridgeMode) {
       const updated = await setterBridgeRequest("admin_status", { token, id: selected.applicant.id, patch }).then(() => true).catch((error) => {
         setLoadMessage(error instanceof Error ? error.message : "Status update failed.");
         return false;
       });
       if (!updated) return;
+      await sendStatusEmailIfNeeded(patch, previousApplicant);
       await loadApplicants();
       await openApplicant(selected.applicant.id);
       return;
@@ -278,8 +284,40 @@ export function AdminDashboard() {
       body: JSON.stringify(patch)
     });
     if (response.ok) {
+      await sendStatusEmailIfNeeded(patch, previousApplicant);
       await loadApplicants();
       await openApplicant(selected.applicant.id);
+    }
+  }
+
+  async function sendStatusEmailIfNeeded(patch: Record<string, unknown>, applicant: ApplicantRecord) {
+    const email = applicant.normalized_email;
+    const name = applicant.full_name || applicant.preferred_name || email;
+    const statusEmail =
+      patch.hiringStageStatus === "bad_fit" && applicant.hiring_stage_status !== "bad_fit"
+        ? { type: "bad_fit_rejection" }
+        : patch.interviewStatus === "manual_request" && applicant.interview_status !== "manual_request"
+          ? { type: "manual_interview_request" }
+          : null;
+
+    if (!statusEmail || !email || !setterOutboundEmailWebhook) return;
+
+    try {
+      const response = await fetch(setterOutboundEmailWebhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          type: statusEmail.type,
+          email,
+          name,
+          calendarUrl: manualInterviewCalendarUrl
+        })
+      });
+      if (!response.ok) throw new Error(`Email workflow returned ${response.status}.`);
+      setLoadMessage(statusEmail.type === "bad_fit_rejection" ? "Status saved and rejection email requested." : "Status saved and interview email requested.");
+    } catch (error) {
+      setLoadMessage(error instanceof Error ? `Status saved, but email was not sent: ${error.message}` : "Status saved, but email was not sent.");
     }
   }
 
@@ -557,6 +595,8 @@ function ReadableApplicationAnswers({ applicant }: { applicant: ApplicantRecord 
         <ReadableField label="Resume" value={applicant.resume_file_name || "No resume uploaded"} />
         <ReadableField label="Resume fit score" value={applicant.resume_score !== null && applicant.resume_score !== undefined ? `${applicant.resume_score}/10` : "Not scored"} />
         <ReadableField label="Resume signals" value={formatResumeSignals(applicant.resume_analysis)} wide />
+        <ReadableField label="AI application score" value={applicant.ai_application_score !== null && applicant.ai_application_score !== undefined ? `${applicant.ai_application_score}/70` : "Not scored"} />
+        <ReadableField label="AI application review" value={formatAiApplicationAnalysis(applicant.ai_application_analysis)} wide />
         <ReadableField label="CRM or scheduling platforms" value={applicant.crm_platforms} wide />
         <ReadableField label="Appointment setting or cold calling experience" value={applicant.appointment_setting_experience} wide />
         <ReadableField label="Industries or offers worked with" value={applicant.industries} wide />
@@ -771,6 +811,8 @@ function ReadableOperationalSummary({ applicant, events }: { applicant: Applican
 
 function ScoreBreakdown({ breakdown }: { breakdown: Record<string, unknown> }) {
   const rows = [
+    ["AI application scored", readableYesNo(breakdown.aiApplicationScored)],
+    ["AI application base", breakdown.aiApplicationScore !== undefined && breakdown.aiApplicationScore !== null ? `${breakdown.aiApplicationScore}/70` : "Not scored"],
     ["Resume uploaded", readableYesNo(breakdown.resumeUploaded)],
     ["Resume fit", `${breakdown.resumeScore || 0}/10`],
     ["Experience detail", `${breakdown.experienceScore || 0}/20`],
@@ -953,6 +995,9 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     resume_uploaded_at: null,
     resume_score: null,
     resume_analysis: null,
+    ai_application_score: null,
+    ai_application_analysis: null,
+    ai_scored_at: null,
     location_city: submission.location?.city || null,
     location_region: submission.location?.region || null,
     location_country: submission.location?.country || null,
@@ -1152,6 +1197,14 @@ function formatReadableValue(value: unknown): string {
 
 function formatResumeSignals(value: Record<string, unknown> | null) {
   if (!value) return "Not scored";
+  if (typeof value.summary === "string" || typeof value.resume_assessment === "string" || typeof value.resumeAssessment === "string") {
+    return [
+      value.summary,
+      value.resume_assessment || value.resumeAssessment,
+      Array.isArray(value.strengths) && value.strengths.length ? `Strengths: ${value.strengths.join(", ")}` : "",
+      Array.isArray(value.concerns) && value.concerns.length ? `Concerns: ${value.concerns.join(", ")}` : ""
+    ].filter(Boolean).join(" ");
+  }
   const signals = [
     value.textExtracted ? `${value.extractedCharacters || 0} characters extracted` : "No readable resume text extracted",
     value.salesExperienceSignal ? "sales/appointment experience" : "",
@@ -1160,6 +1213,19 @@ function formatResumeSignals(value: Record<string, unknown> | null) {
     value.metricsSignal ? "measurable resume metrics" : ""
   ].filter(Boolean);
   return signals.join(", ") || "No strong resume signals";
+}
+
+function formatAiApplicationAnalysis(value: Record<string, unknown> | null) {
+  if (!value) return "Not scored";
+  const breakdown = (value.score_breakdown || value.scoreBreakdown || {}) as Record<string, unknown>;
+  return [
+    value.recommendation ? `Recommendation: ${formatStatusLabel(String(value.recommendation))}.` : "",
+    value.summary ? String(value.summary) : "",
+    Array.isArray(value.strengths) && value.strengths.length ? `Strengths: ${value.strengths.join(", ")}.` : "",
+    Array.isArray(value.concerns) && value.concerns.length ? `Concerns: ${value.concerns.join(", ")}.` : "",
+    value.resume_assessment || value.resumeAssessment ? `Resume: ${String(value.resume_assessment || value.resumeAssessment)}.` : "",
+    Object.keys(breakdown).length ? `Subscores: ${Object.entries(breakdown).map(([key, val]) => `${formatStatusLabel(key)} ${val}`).join(", ")}.` : ""
+  ].filter(Boolean).join(" ") || "AI review saved without readable notes.";
 }
 
 function readableYesNo(value: unknown) {

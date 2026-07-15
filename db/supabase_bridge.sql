@@ -16,6 +16,9 @@ alter table public.sbp_setter_applicants
   add column if not exists resume_uploaded_at timestamptz,
   add column if not exists resume_score integer,
   add column if not exists resume_analysis jsonb,
+  add column if not exists ai_application_score integer,
+  add column if not exists ai_application_analysis jsonb,
+  add column if not exists ai_scored_at timestamptz,
   add column if not exists location_city text,
   add column if not exists location_region text,
   add column if not exists location_country text,
@@ -34,6 +37,13 @@ create table if not exists public.sbp_setter_resume_files (
   uploaded_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.sbp_setter_resume_files
+  add column if not exists resume_text text,
+  add column if not exists resume_score integer,
+  add column if not exists resume_analysis jsonb,
+  add column if not exists uploaded_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
 
 alter table public.sbp_setter_resume_files enable row level security;
 
@@ -217,6 +227,8 @@ declare
   resume_text_value text := '';
   resume_score_value integer := 0;
   resume_analysis_value jsonb := '{}'::jsonb;
+  ai_application_score_value integer;
+  ai_application_analysis_value jsonb := '{}'::jsonb;
   experience_score integer := 0;
   metrics_score integer := 0;
   crm_score integer := 0;
@@ -332,6 +344,29 @@ begin
     return jsonb_build_object('ok', true);
   end if;
 
+  if action = 'mock_call_status' then
+    applicant_uuid := nullif(payload->>'applicantId', '')::uuid;
+    if applicant_uuid is null then
+      return jsonb_build_object('ok', false, 'message', 'Applicant ID is required.');
+    end if;
+
+    select
+      coalesce(count(*) filter (where status = 'completed'), 0)::integer,
+      coalesce(count(*) filter (where backend_score is not null), 0)::integer,
+      coalesce(avg(backend_score) filter (where backend_score is not null), 0)
+    into completed_calls, mock_scored_calls, mock_average_score
+    from public.sbp_setter_mock_calls
+    where applicant_id = applicant_uuid;
+
+    return jsonb_build_object(
+      'ok', true,
+      'applicantId', applicant_uuid,
+      'completedCalls', completed_calls,
+      'scoredCalls', mock_scored_calls,
+      'mockAverageScore', round(mock_average_score)::integer
+    );
+  end if;
+
   if action = 'resume_upload' then
     applicant_uuid := nullif(payload->>'applicantId', '')::uuid;
     file_name := nullif(payload->>'fileName', '');
@@ -425,6 +460,69 @@ begin
     ));
   end if;
 
+  if action = 'ai_application_score' then
+    if coalesce(payload->>'token', '') <> admin_password then
+      return jsonb_build_object('ok', false, 'message', 'Enter the admin password to update AI scoring.');
+    end if;
+
+    applicant_uuid := nullif(payload->>'applicantId', '')::uuid;
+    if applicant_uuid is null then
+      return jsonb_build_object('ok', false, 'message', 'Applicant ID is required for AI scoring.');
+    end if;
+
+    ai_application_score_value := greatest(0, least(70, coalesce(nullif(payload->>'applicationScore', '')::numeric::integer, 0)));
+    resume_score_value := greatest(0, least(10, coalesce(nullif(payload->>'resumeScore', '')::numeric::integer, 0)));
+    ai_application_analysis_value := coalesce(payload->'analysis', '{}'::jsonb);
+    resume_analysis_value := coalesce(payload->'resumeAnalysis', '{}'::jsonb);
+
+    update public.sbp_setter_applicants
+    set
+      ai_application_score = ai_application_score_value,
+      ai_application_analysis = ai_application_analysis_value,
+      ai_scored_at = now(),
+      resume_score = resume_score_value,
+      resume_analysis = case
+        when resume_analysis_value = '{}'::jsonb then resume_analysis
+        else resume_analysis_value
+      end,
+      updated_at = now()
+    where id = applicant_uuid
+    returning * into applicant;
+
+    if not found then
+      return jsonb_build_object('ok', false, 'message', 'Applicant not found for AI scoring.');
+    end if;
+
+    update public.sbp_setter_resume_files
+    set
+      resume_score = resume_score_value,
+      resume_analysis = case
+        when resume_analysis_value = '{}'::jsonb then resume_analysis
+        else resume_analysis_value
+      end,
+      updated_at = now()
+    where applicant_id = applicant_uuid;
+
+    insert into public.sbp_setter_application_events (applicant_id, event_type, metadata)
+    values (
+      applicant_uuid,
+      'ai_application_scored',
+      jsonb_build_object(
+        'applicationScore', ai_application_score_value,
+        'resumeScore', resume_score_value,
+        'analysis', ai_application_analysis_value
+      )
+    );
+
+    return jsonb_build_object(
+      'ok', true,
+      'applicantId', applicant_uuid,
+      'applicationScore', ai_application_score_value,
+      'resumeScore', resume_score_value,
+      'analysis', ai_application_analysis_value
+    );
+  end if;
+
   if action = 'submit' then
     fields := coalesce(payload->'fields', '{}'::jsonb);
     applicant_uuid := nullif(payload->>'applicantId', '')::uuid;
@@ -459,8 +557,10 @@ begin
 
     select
       coalesce(a.resume_score, r.resume_score, case when resume_uploaded then 2 else 0 end),
-      coalesce(a.resume_analysis, r.resume_analysis, '{}'::jsonb)
-    into resume_score_value, resume_analysis_value
+      coalesce(a.resume_analysis, r.resume_analysis, '{}'::jsonb),
+      a.ai_application_score,
+      coalesce(a.ai_application_analysis, '{}'::jsonb)
+    into resume_score_value, resume_analysis_value, ai_application_score_value, ai_application_analysis_value
     from public.sbp_setter_applicants a
     left join public.sbp_setter_resume_files r on r.applicant_id = a.id
     where a.id = applicant_uuid;
@@ -594,16 +694,25 @@ begin
       mock_call_score := 5;
     end if;
 
-    score := score
-      + resume_score_value
-      + experience_score
-      + metrics_score
-      + crm_score
-      + industries_score
-      + sample_listening_score
-      + mock_call_score;
+    if ai_application_score_value is not null then
+      score := greatest(0, least(70, ai_application_score_value))
+        + sample_listening_score
+        + mock_call_score;
+    else
+      score := score
+        + resume_score_value
+        + experience_score
+        + metrics_score
+        + crm_score
+        + industries_score
+        + sample_listening_score
+        + mock_call_score;
+    end if;
 
     score_breakdown := jsonb_build_object(
+      'aiApplicationScored', ai_application_score_value is not null,
+      'aiApplicationScore', ai_application_score_value,
+      'aiApplicationAnalysis', ai_application_analysis_value,
       'resumeUploaded', resume_uploaded,
       'resumeScore', resume_score_value,
       'resumeAnalysis', resume_analysis_value,
@@ -665,7 +774,7 @@ begin
     );
   end if;
 
-  if action in ('admin_list', 'admin_detail', 'admin_status', 'admin_note', 'admin_resume', 'vapi_report') then
+  if action in ('admin_list', 'admin_detail', 'admin_status', 'admin_note', 'admin_resume', 'vapi_report', 'ai_application_score') then
     if coalesce(payload->>'token', '') <> admin_password then
       return jsonb_build_object('ok', false, 'message', 'Enter the admin password to view applicants.');
     end if;
@@ -718,6 +827,7 @@ begin
         'fileType', resume_row.file_type,
         'fileSize', resume_row.file_size,
         'fileBase64', resume_row.file_base64,
+        'resumeText', resume_row.resume_text,
         'resumeScore', resume_row.resume_score,
         'resumeAnalysis', resume_row.resume_analysis,
         'uploadedAt', resume_row.updated_at

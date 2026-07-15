@@ -57,6 +57,9 @@ const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 const duplicateApplicationMessage =
   "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
 const postScheduleVideoUrl = "/media/appt_setter_0_v3.mp4";
+const applicationAiScoreWebhook =
+  process.env.NEXT_PUBLIC_SETTER_APPLICATION_AI_SCORE_WEBHOOK ||
+  "https://n8n.americanlifeteam.com/webhook/solidbooked-setter-application-ai-score";
 const initialPostScheduleVideo: MediaEngagementInput = {
   mediaType: "post_schedule_video",
   mediaKey: "appt_setter_0",
@@ -548,6 +551,8 @@ export function ApplicationFunnel({ config }: Props) {
     };
     try {
       if (staticPagesMode && setterBridgeUrl) {
+        await scoreApplicationWithAi(applicantId);
+        await waitForMockCallScoring(applicantId);
         const body = await setterBridgeRequest<{ status: QualificationStatus; message: string; calendar: PublicConfig["calendar"] | null }>("submit", payload);
         setSubmitting(false);
         setResult({ status: body.status, message: body.message, calendar: body.calendar });
@@ -569,10 +574,10 @@ export function ApplicationFunnel({ config }: Props) {
       setResult({ status: body.status, message: body.message, calendar: body.calendar });
       localStorage.removeItem("sbp_setter_next_state");
       track("application_submitted", { status: body.status });
-    } catch {
+    } catch (error) {
       setSubmitting(false);
       if (staticPagesMode && setterBridgeUrl) {
-        setErrors({ submit: "We could not save your application to the backend. Please check your connection and try again before submitting." });
+        setErrors({ submit: error instanceof Error ? error.message : "We could not complete the application review. Please check your connection and try again." });
         setSaveState("Not saved.");
         return;
       }
@@ -591,6 +596,30 @@ export function ApplicationFunnel({ config }: Props) {
         calendar: null
       });
       localStorage.removeItem("sbp_setter_next_state");
+    }
+  }
+
+  async function scoreApplicationWithAi(currentApplicantId: string) {
+    if (!applicationAiScoreWebhook) return;
+    const response = await fetch(applicationAiScoreWebhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicantId: currentApplicantId })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body?.ok === false) {
+      throw new Error(body?.message || body?.error || "Application review could not be completed.");
+    }
+  }
+
+  async function waitForMockCallScoring(currentApplicantId: string) {
+    const completed = mockCalls.filter((call) => call.status === "completed").length;
+    if (!setterBridgeUrl || completed < 3) return;
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      const status = await setterBridgeRequest<{ scoredCalls?: number }>("mock_call_status", { applicantId: currentApplicantId }).catch(() => null);
+      if (Number(status?.scoredCalls || 0) >= 3) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 1500));
     }
   }
 

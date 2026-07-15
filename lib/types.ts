@@ -38,6 +38,9 @@ export type ApplicantRecord = {
   resume_uploaded_at: string | null;
   resume_score: number | null;
   resume_analysis: Record<string, unknown> | null;
+  ai_application_score: number | null;
+  ai_application_analysis: Record<string, unknown> | null;
+  ai_scored_at: string | null;
   location_city: string | null;
   location_region: string | null;
   location_country: string | null;
