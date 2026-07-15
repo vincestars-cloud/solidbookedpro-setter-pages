@@ -102,12 +102,12 @@ const packet = {
     prior_resume_analysis: applicant.resume_analysis || resume.resumeAnalysis || null
   },
   scoring_rubric_total_70: {
-    resume: '0-10: directly relevant sales, SDR, appointment setting, outbound, phone, CRM, measurable performance. Penalize unrelated or no readable resume.',
-    appointment_setting_experience: '0-20: depth and specificity of appointment setting, cold calling, follow-up, objection handling, phone confidence, prior outbound sales.',
-    past_metrics: '0-20: specific numbers such as calls, conversations, appointments booked, show rates, quotas, conversion rates. Vague claims score low.',
+    resume: '0-10: directly relevant sales, SDR, appointment setting, outbound, phone, CRM, measurable performance. Penalize unrelated, inflated, vague, or no readable resume.',
+    appointment_setting_experience: '0-20: depth and specificity of appointment setting, cold calling, follow-up, objection handling, phone confidence, prior outbound sales. Reward evidence of staying in uncomfortable conversations, not just customer service.',
+    past_metrics: '0-20: specific numbers such as calls, conversations, appointments booked, show rates, quotas, conversion rates. Strong metrics beat polished wording. Vague claims score low.',
     crm_tools: '0-8: relevant CRM, dialer, scheduling, tracking, prospecting tool familiarity.',
     industries_fit: '0-7: experience with local service, B2B, marketing, lead gen, websites, high-volume phone roles, or transferable offers.',
-    reliability_clarity: '0-5: coherent answers, realistic schedule/pay expectations, consistency, professionalism.'
+    reliability_clarity: '0-5: coherent answers, realistic schedule/pay expectations, consistency, professionalism, coachability, and no obvious contradictions.'
   }
 };
 
@@ -125,12 +125,28 @@ const openAiResponse = await helpers.httpRequest({
     messages: [
       {
         role: 'system',
-        content: 'You are a strict hiring evaluator for an appointment setter role. Score only the application and resume packet, not mock-call transcripts. Reward direct phone sales, appointment setting, cold calling, objection handling, follow-up consistency, measurable performance, CRM/dialer familiarity, and clear written communication. Penalize vague answers, no measurable proof, unrelated experience, and obvious contradictions. Return only valid JSON.'
+        content: 'You are a strict hiring evaluator for a remote appointment setter role, using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical outbound B2B appointment setting. Score only the application and resume packet, not mock-call transcripts. Reward evidence of real outbound reps: cold/warm calling, staying in uncomfortable objection moments, follow-up discipline, CRM/dialer use, measurable appointment production, show-rate awareness, phone stamina, coachability, and clear truthful communication. Do not over-reward polished resume language without numbers or proof. Penalize vague answers, no measurable proof, customer-service-only experience, job hopping without context, inflated claims, weak availability/pay mismatch, and obvious contradictions. Return only valid JSON.'
       },
       {
         role: 'user',
         content: JSON.stringify({
           packet,
+          sales_expert_lens: {
+            what_strong_looks_like: [
+              'Has made many outbound calls and can stay calm through objections.',
+              'Understands that send me info / let me think can be brush-offs, not buying signals.',
+              'Tracks calls, conversations, booked appointments, show rate, quota, or similar KPIs.',
+              'Has used CRM/dialer workflows and follows up consistently.',
+              'Communicates specifically and can be coached.'
+            ],
+            what_weak_looks_like: [
+              'Only says they are good with people but gives no phone-sales evidence.',
+              'No numbers, quotas, appointment counts, or show-rate awareness.',
+              'Treats follow-up as passive checking in instead of leading to a next step.',
+              'Mostly retail/customer service/admin experience with no outbound sales transfer.',
+              'Contradictory availability, unrealistic pay expectations, or vague answers.'
+            ]
+          },
           required_json: {
             application_score_70: '0-70 integer; sum of score_breakdown',
             resume_score_10: '0-10 integer',

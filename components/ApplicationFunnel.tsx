@@ -56,7 +56,7 @@ const scenarioIntro =
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 const duplicateApplicationMessage =
   "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
-const postScheduleVideoUrl = "/media/appt_setter_0_v3.mp4";
+const postScheduleVideoUrl = "/media/appt_setter_0_hq.mp4";
 const applicationAiScoreWebhook =
   process.env.NEXT_PUBLIC_SETTER_APPLICATION_AI_SCORE_WEBHOOK ||
   "https://n8n.americanlifeteam.com/webhook/solidbooked-setter-application-ai-score";
@@ -615,7 +615,7 @@ export function ApplicationFunnel({ config }: Props) {
   async function waitForMockCallScoring(currentApplicantId: string) {
     const completed = mockCalls.filter((call) => call.status === "completed").length;
     if (!setterBridgeUrl || completed < 3) return;
-    const deadline = Date.now() + 20000;
+    const deadline = Date.now() + 10000;
     while (Date.now() < deadline) {
       const status = await setterBridgeRequest<{ scoredCalls?: number }>("mock_call_status", { applicantId: currentApplicantId }).catch(() => null);
       if (Number(status?.scoredCalls || 0) >= 3) return;

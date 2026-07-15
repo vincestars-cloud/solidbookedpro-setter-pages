@@ -24,7 +24,6 @@ const adminToken = process.env.SETTER_ADMIN_TOKEN || "scalingsos2026";
 
 if (!n8nKey) throw new Error("n8n public API key not found.");
 if (!openAiKey) throw new Error("OpenAI API key not found.");
-if (!vapiKey) throw new Error("Set VAPI_PRIVATE_KEY before running this script.");
 if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase public bridge config not found.");
 
 const scoringCode = `
@@ -177,7 +176,7 @@ if (transcript && hasApplicantSpeech(transcript)) {
     messages: [
       {
         role: 'system',
-        content: 'You are a strict appointment-setter hiring evaluator. Score only the applicant behavior in the transcript. Reward confident communication, listening, isolating objections, challenging brush-offs respectfully, and asking for a concrete appointment next step. Penalize accepting brush-offs like send me info or let me think without clarifying, low confidence, no next-step ask, rambling, or weak judgment. Return only valid JSON.'
+        content: 'You are a strict appointment-setter hiring evaluator using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical B2B appointment setting. Score only the applicant behavior in the transcript. Do not reward mere politeness, agreeing, or generic follow-up. A trained setter should lower resistance, listen, identify the true objection under the brush-off, ask concise truth-seeking questions, respectfully challenge avoidance, and ask for a concrete appointment/review next step. Penalize accepting stalls such as "send me information", "let me think about it", "we get referrals", or "we are not interested" at face value. Penalize info-dumping, over-explaining, arguing, sounding needy, no attempt beyond the first brush-off, and ending with vague follow-up. Return only valid JSON.'
       },
       {
         role: 'user',
@@ -185,6 +184,27 @@ if (transcript && hasApplicantSpeech(transcript)) {
           mock_call_number: mockCallNumber,
           ended_reason: endedReason,
           transcript,
+          judging_lens: {
+            source_principles: [
+              'NEPQ: sell through questions, not pressure; uncover situation, problem awareness, consequence, and next step.',
+              'Daniel G / NRS: fortune is in attempts on the first conversation; do not hide in the follow-up loop; objections are often created upstream by weak frame or language.',
+              'Josh Lyons: separate signal from noise, ask specific clarifying questions, stay present and flexible, lead with truth instead of scripts.',
+              'Objection handling: acknowledge, classify the real objection, respond, then redirect to a specific next action.'
+            ],
+            scenario_calibration: {
+              mock_1: 'Prospect believes referrals/no website are enough. Strong response respects that, probes whether they are 100% satisfied with customer flow/visibility, reframes the prepared preview as show-first value, then asks for a short review appointment.',
+              mock_2: 'Prospect says let me think about it. Strong response treats this as a stall, isolates whether the real issue is timing, trust, fit, confusion, or priority, then asks for the review appointment if there is any real interest.',
+              mock_3: 'Follow-up after information was sent. Strong response re-establishes context, asks what they thought, isolates what would stop them, and naturally gets agreement to a review appointment.'
+            },
+            failure_patterns: [
+              'Sure, I will send more information.',
+              'Okay, let me know.',
+              'When should I follow up?',
+              'Sounds good, have a nice day.',
+              'Long product pitch without a question.',
+              'Arguing with the prospect instead of leading calmly.'
+            ]
+          },
           required_json: {
             overall_score: '0-100 integer',
             recommendation: 'strong_fit | manual_review | poor_fit',
@@ -192,12 +212,12 @@ if (transcript && hasApplicantSpeech(transcript)) {
             strengths: ['specific strengths'],
             concerns: ['specific concerns'],
             criteria: {
-              communication: '0-20',
-              listening: '0-15',
-              confidence: '0-15',
-              objection_handling: '0-25',
-              next_step_control: '0-15',
-              judgment: '0-10'
+              frame_and_low_resistance_opening: '0-15',
+              listening_and_specificity: '0-15',
+              objection_diagnosis_and_isolation: '0-25',
+              respectful_challenge_and_belief_shift: '0-20',
+              concrete_next_step_control: '0-15',
+              judgment_brevity_and_tone: '0-10'
             },
             objection_moments: [
               {
@@ -205,9 +225,12 @@ if (transcript && hasApplicantSpeech(transcript)) {
                 candidate_response: 'what the applicant said',
                 judgment: 'what was good or weak',
                 score: '0-10',
-                recommended_move: 'what a trained setter should have done'
+                recommended_move: 'what a trained setter should have done',
+                advisor_lens: 'NEPQ | NRS | Josh Lyons | objection-handling principle that applies'
               }
-            ]
+            ],
+            disqualifying_signals: ['major sales red flags observed'],
+            better_next_line: 'one concise line a trained setter could have said next'
           }
         })
       }
@@ -409,24 +432,27 @@ await n8n(`/workflows/${workflowId}/activate`, { method: "POST" }).catch((error)
 });
 
 const assistantResults = [];
-for (const id of assistantIds) {
-  const updated = await vapi(`/assistant/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      serverUrl: webhookUrl,
-      serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
-      analysisPlan: {
-        summaryPlan: { enabled: false },
-        structuredDataPlan: { enabled: false }
-      }
-    })
-  });
-  assistantResults.push({ id, name: updated.name, serverUrl: updated.serverUrl, serverMessages: updated.serverMessages });
+if (vapiKey) {
+  for (const id of assistantIds) {
+    const updated = await vapi(`/assistant/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        serverUrl: webhookUrl,
+        serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
+        analysisPlan: {
+          summaryPlan: { enabled: false },
+          structuredDataPlan: { enabled: false }
+        }
+      })
+    });
+    assistantResults.push({ id, name: updated.name, serverUrl: updated.serverUrl, serverMessages: updated.serverMessages });
+  }
 }
 
 console.log(JSON.stringify({
   ok: true,
   workflowId,
   webhookUrl,
+  assistantUpdateSkipped: !vapiKey,
   assistants: assistantResults
 }, null, 2));
