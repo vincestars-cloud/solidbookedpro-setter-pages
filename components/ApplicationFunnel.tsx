@@ -7,6 +7,13 @@ import type { ApplicationFields, ClientMockCallState, MediaEngagementInput, Publ
 type Props = { config: PublicConfig };
 type CallState = ClientMockCallState & { error?: string; transcript?: Array<Record<string, unknown>> };
 type ResultState = { status: QualificationStatus; message: string; calendar: PublicConfig["calendar"] | null } | null;
+type ApplicantLocation = {
+  city?: string;
+  region?: string;
+  country?: string;
+  timezone?: string;
+  source?: string;
+};
 const applicationSteps = [
   "Tell us about yourself",
   "Understand our sales process",
@@ -61,6 +68,7 @@ export function ApplicationFunnel({ config }: Props) {
   const [saveState, setSaveState] = useState("Not saved yet.");
   const [resumeUploadState, setResumeUploadState] = useState("");
   const [result, setResult] = useState<ResultState>(null);
+  const [applicantLocation, setApplicantLocation] = useState<ApplicantLocation | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [micGranted, setMicGranted] = useState(false);
   const [micStatus, setMicStatus] = useState("Test your microphone before starting.");
@@ -111,6 +119,7 @@ export function ApplicationFunnel({ config }: Props) {
       else if (parsed.currentStep) setStarted(true);
       if (parsed.highestStep) setHighestStep(Math.min(totalSteps, Math.max(1, parsed.highestStep)));
       if (parsed.fields) setFields({ ...emptyFields, ...parsed.fields });
+      if (parsed.location) setApplicantLocation(parsed.location);
       if (parsed.callLibrary) setCallLibrary(parsed.callLibrary);
       if (parsed.mockCalls) setMockCalls(parsed.mockCalls);
       if (Array.isArray(parsed.scenarios)) {
@@ -125,11 +134,24 @@ export function ApplicationFunnel({ config }: Props) {
   }, []);
 
   useEffect(() => {
+    const cached = localStorage.getItem("sbp_setter_location");
+    if (cached) {
+      try {
+        setApplicantLocation(JSON.parse(cached));
+        return;
+      } catch {
+        localStorage.removeItem("sbp_setter_location");
+      }
+    }
+    captureApproxLocation();
+  }, []);
+
+  useEffect(() => {
     scheduleSave();
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [fields, started, currentStep, highestStep, callLibrary, mockCalls, scenarios]);
+  }, [fields, started, currentStep, highestStep, callLibrary, mockCalls, scenarios, applicantLocation]);
 
   function updateField<K extends keyof ApplicationFields>(key: K, value: ApplicationFields[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -142,7 +164,7 @@ export function ApplicationFunnel({ config }: Props) {
     if (applicantId) return applicantId;
     try {
       if (staticPagesMode && setterBridgeUrl) {
-        const payload = await setterBridgeRequest<{ applicantId: string; duplicate?: boolean; message?: string }>("session", { email });
+        const payload = await setterBridgeRequest<{ applicantId: string; duplicate?: boolean; message?: string }>("session", { email, location: applicantLocation });
         if (payload.duplicate) {
           setDuplicateMessage(payload.message || duplicateApplicationMessage);
           setErrors((prev) => ({ ...prev, email: payload.message || duplicateApplicationMessage }));
@@ -170,14 +192,14 @@ export function ApplicationFunnel({ config }: Props) {
     } catch {
       if (staticPagesMode && setterBridgeUrl) {
         const message = "We could not create your application session. Please check your connection and try again.";
-        setSaveState("Not saved to Supabase.");
+        setSaveState("Not saved.");
         setErrors((prev) => ({ ...prev, email: message }));
         return null;
       }
       if (!staticPagesMode) return null;
       const localId = crypto.randomUUID ? crypto.randomUUID() : `local_${Date.now()}`;
       setApplicantId(localId);
-      setSaveState("Saved on this device. Supabase bridge is unavailable.");
+      setSaveState("Saved on this device.");
       return localId;
     }
   }
@@ -223,6 +245,7 @@ export function ApplicationFunnel({ config }: Props) {
       currentStep,
       highestStep,
       fields,
+      location: applicantLocation,
       callLibrary,
       mockCalls,
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
@@ -232,8 +255,8 @@ export function ApplicationFunnel({ config }: Props) {
     if (staticPagesMode) {
       if (setterBridgeUrl) {
         await setterBridgeRequest("autosave", state)
-          .then(() => setSaveState("Saved to Supabase."))
-          .catch(() => setSaveState("Saved on this device. Supabase bridge is unavailable."));
+          .then(() => setSaveState("Saved."))
+          .catch(() => setSaveState("Saved on this device."));
         return;
       }
       setSaveState("Saved on this device.");
@@ -290,6 +313,7 @@ export function ApplicationFunnel({ config }: Props) {
       currentStep,
       highestStep,
       fields,
+      location: applicantLocation,
       callLibrary,
       mockCalls,
       scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
@@ -523,7 +547,7 @@ export function ApplicationFunnel({ config }: Props) {
       setSubmitting(false);
       if (staticPagesMode && setterBridgeUrl) {
         setErrors({ submit: "We could not save your application to the backend. Please check your connection and try again before submitting." });
-        setSaveState("Not saved to Supabase.");
+        setSaveState("Not saved.");
         return;
       }
       if (!staticPagesMode) {
@@ -541,6 +565,26 @@ export function ApplicationFunnel({ config }: Props) {
         calendar: null
       });
       localStorage.removeItem("sbp_setter_next_state");
+    }
+  }
+
+  async function captureApproxLocation() {
+    try {
+      const response = await fetch("https://ipapi.co/json/", { cache: "no-store" });
+      if (!response.ok) return;
+      const body = await response.json();
+      const location = {
+        city: String(body.city || ""),
+        region: String(body.region || body.region_code || ""),
+        country: String(body.country_name || body.country || ""),
+        timezone: String(body.timezone || ""),
+        source: "ipapi"
+      };
+      if (!location.city && !location.region && !location.country) return;
+      setApplicantLocation(location);
+      localStorage.setItem("sbp_setter_location", JSON.stringify(location));
+    } catch {
+      // Location is a convenience signal for admins; never block the applicant flow.
     }
   }
 
@@ -939,7 +983,7 @@ export function ApplicationFunnel({ config }: Props) {
 
                   {currentStep === 4 && (
                     <section className="form-step active">
-                      <div className="step-heading"><div><h2>See what your first day looks like & schedule phone interview.</h2><p>Review the paid training day, then submit your application.</p></div></div>
+                      <div className="step-heading"><div><h2>See what your first day looks like & schedule phone interview.</h2></div></div>
                       <section className="first-day-card" aria-label="What your first day looks like">
                         <p className="kicker">What your first day looks like</p>
                         <p>Your first day is a paid training and evaluation day. Here&apos;s the schedule:</p>

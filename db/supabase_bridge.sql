@@ -13,7 +13,12 @@ $$;
 
 alter table public.sbp_setter_applicants
   add column if not exists resume_file_type text,
-  add column if not exists resume_uploaded_at timestamptz;
+  add column if not exists resume_uploaded_at timestamptz,
+  add column if not exists location_city text,
+  add column if not exists location_region text,
+  add column if not exists location_country text,
+  add column if not exists location_timezone text,
+  add column if not exists location_metadata jsonb;
 
 create table if not exists public.sbp_setter_resume_files (
   applicant_id uuid primary key references public.sbp_setter_applicants(id) on delete cascade,
@@ -50,6 +55,7 @@ as $$
 declare
   applicant_uuid uuid;
   fields jsonb := coalesce(payload->'fields', '{}'::jsonb);
+  location jsonb := coalesce(payload->'location', '{}'::jsonb);
   item jsonb;
   current_step_value integer := coalesce(nullif(payload->>'currentStep', '')::integer, 1);
   highest_step_value integer := coalesce(nullif(payload->>'highestStep', '')::integer, current_step_value);
@@ -85,6 +91,11 @@ begin
       else resume_file_size
     end,
     resume_file_type = case when fields ? 'resumeFileType' then nullif(fields->>'resumeFileType', '') else resume_file_type end,
+    location_city = case when location ? 'city' then nullif(location->>'city', '') else location_city end,
+    location_region = case when location ? 'region' then nullif(location->>'region', '') else location_region end,
+    location_country = case when location ? 'country' then nullif(location->>'country', '') else location_country end,
+    location_timezone = case when location ? 'timezone' then nullif(location->>'timezone', '') else location_timezone end,
+    location_metadata = case when location <> '{}'::jsonb then location else location_metadata end,
     current_step = current_step_value,
     application_status = public.sbp_setter_status_from_step(highest_step_value),
     abandoned_at_step = current_step_value,
@@ -202,7 +213,6 @@ declare
   end_minutes integer;
   office_start integer := public.sbp_setter_time_minutes('09:00');
   office_end integer := public.sbp_setter_time_minutes('17:00');
-  scenarios_all_long boolean := false;
   rows_json jsonb;
   patch jsonb;
   file_name text;
@@ -234,8 +244,28 @@ begin
       return jsonb_build_object('ok', true, 'duplicate', true, 'applicantId', applicant.id, 'message', duplicate_message);
     end if;
 
-    insert into public.sbp_setter_applicants (normalized_email, application_status, current_step, interview_status)
-    values (email_norm, 'started', 1, 'not_scheduled')
+    insert into public.sbp_setter_applicants (
+      normalized_email,
+      application_status,
+      current_step,
+      interview_status,
+      location_city,
+      location_region,
+      location_country,
+      location_timezone,
+      location_metadata
+    )
+    values (
+      email_norm,
+      'started',
+      1,
+      'not_scheduled',
+      nullif(payload->'location'->>'city', ''),
+      nullif(payload->'location'->>'region', ''),
+      nullif(payload->'location'->>'country', ''),
+      nullif(payload->'location'->>'timezone', ''),
+      nullif(payload->'location', 'null'::jsonb)
+    )
     returning * into applicant;
 
     insert into public.sbp_setter_application_events (applicant_id, event_type, step, metadata)
@@ -365,6 +395,26 @@ begin
     if coalesce((fields->>'accuracyConfirmation')::boolean, false) = false then
       hard_flags_arr := array_append(hard_flags_arr, 'required_acknowledgment_missing');
     end if;
+    if nullif(fields->>'fullName', '') is null
+      or nullif(fields->>'preferredName', '') is null
+      or nullif(fields->>'email', '') is null
+      or nullif(fields->>'desiredHourly', '') is null
+      or nullif(fields->>'earliestStartDate', '') is null
+      or nullif(fields->>'availableStart', '') is null
+      or nullif(fields->>'availableEnd', '') is null
+      or nullif(fields->>'vocarooUrl', '') is null
+      or nullif(fields->>'crmPlatforms', '') is null
+      or nullif(fields->>'appointmentSettingExperience', '') is null
+      or nullif(fields->>'industries', '') is null
+      or nullif(fields->>'pastMetrics', '') is null then
+      hard_flags_arr := array_append(hard_flags_arr, 'required_answers_missing');
+    end if;
+    if coalesce(fields->>'email', '') !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+      hard_flags_arr := array_append(hard_flags_arr, 'invalid_email');
+    end if;
+    if coalesce(fields->>'vocarooUrl', '') !~* '^https?://(www\.)?(voca\.ro|vocaroo\.com)/' then
+      hard_flags_arr := array_append(hard_flags_arr, 'invalid_vocaroo_url');
+    end if;
     if completed_calls < 1 then
       hard_flags_arr := array_append(hard_flags_arr, 'microphone_not_confirmed');
     end if;
@@ -388,11 +438,6 @@ begin
     if coalesce(nullif(fields->>'desiredHourly', '')::numeric, 999) <= 8 then score := score + 12; end if;
     if overlap_hours >= 5 then score := score + 10; end if;
     if completed_calls = 3 then score := score + 6; end if;
-
-    select coalesce(bool_and(length(coalesce(value->>'response', '')) >= 80), false)
-    into scenarios_all_long
-    from jsonb_array_elements(coalesce(payload->'scenarios', '[]'::jsonb));
-    if scenarios_all_long then score := score + 22; end if;
 
     if array_length(hard_flags_arr, 1) is not null then
       result_status := 'not_qualified';

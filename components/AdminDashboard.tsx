@@ -15,7 +15,6 @@ const fitStatuses = [
 ];
 const pageSize = 25;
 const applicationStatuses = ["started", "step_1_complete", "step_2_complete", "step_3_complete", "mock_calls_in_progress", "application_completed", "interview_scheduled", "interview_completed", "paid_trial", "hired", "rejected", "withdrawn"];
-const qualificationStatuses = ["qualified", "manual_review", "not_qualified"];
 const interviewStatuses = ["not_scheduled", "scheduled", "completed"];
 
 type StaticSubmission = {
@@ -23,6 +22,7 @@ type StaticSubmission = {
   currentStep?: number;
   highestStep?: number;
   fields?: Record<string, any>;
+  location?: Record<string, any>;
   callLibrary?: MediaEngagementInput[];
   mockCalls?: Array<Record<string, any>>;
   scenarios?: Array<Record<string, any>>;
@@ -145,12 +145,13 @@ export function AdminDashboard() {
 
   const stats = useMemo(() => {
     const completed = applicants.filter((a) => a.application_status === "application_completed").length;
-    const qualified = applicants.filter((a) => a.qualification_status === "qualified").length;
-    const review = applicants.filter((a) => a.qualification_status === "manual_review").length;
+    const aPlayers = applicants.filter((a) => a.hiring_stage_status === "a_player").length;
+    const bPlayers = applicants.filter((a) => a.hiring_stage_status === "b_player").length;
+    const badFits = applicants.filter((a) => a.hiring_stage_status === "bad_fit").length;
     const calls = bridgeMode
       ? applicants.reduce((sum, item) => sum + Number((item as any).mock_calls_completed || 0), 0)
       : getStaticSubmissions().reduce((sum, item) => sum + (item.mockCalls || []).filter((call) => call.status === "completed").length, 0);
-    return { total: applicants.length, completed, qualified, review, calls };
+    return { total: applicants.length, completed, aPlayers, bPlayers, badFits, calls };
   }, [applicants]);
 
   async function loadApplicants(authToken = token) {
@@ -162,7 +163,7 @@ export function AdminDashboard() {
           sessionStorage.setItem(adminTokenStorageKey, authToken);
         }
         setApplicants(body.applicants || []);
-        setLoadMessage("Showing Supabase submissions through the SolidBooked Pro bridge.");
+        setLoadMessage("Showing saved submissions.");
         if (selected && !body.applicants?.some((applicant) => applicant.id === selected.applicant.id)) setSelected(null);
         return;
       } catch (error) {
@@ -319,7 +320,7 @@ export function AdminDashboard() {
     setResumeMessage("Preparing resume...");
     try {
       if (!bridgeMode) {
-        setResumeMessage("Resume file content is only available for Supabase-backed submissions.");
+        setResumeMessage("Resume file content is only available for saved submissions.");
         return;
       }
       const body = await setterBridgeRequest<{ resume: ResumePayload }>("admin_resume", { token, id: selected.applicant.id });
@@ -367,7 +368,7 @@ export function AdminDashboard() {
           <div>
             <span className="eyebrow"><span className="dot" /> Hiring command center</span>
             <h1>Setter Application Dashboard</h1>
-            <p>Review submissions, call activity, scenario answers, status changes, and notes from one place.</p>
+            <p>Review submissions, call activity, status changes, and notes from one place.</p>
           </div>
           <div className="admin-actions">
             {(!staticPagesMode || bridgeMode) && <input className="control" type="password" placeholder={token ? "Admin password saved" : "Admin password"} value={token} onChange={(event) => setToken(event.target.value)} />}
@@ -390,8 +391,9 @@ export function AdminDashboard() {
         <section className="admin-stat-grid" aria-label="Application statistics">
           <Stat label="Applicants" value={stats.total} />
           <Stat label="Completed" value={stats.completed} />
-          <Stat label="Qualified" value={stats.qualified} />
-          <Stat label="Manual review" value={stats.review} />
+          <Stat label="A-Players" value={stats.aPlayers} />
+          <Stat label="B-Players" value={stats.bPlayers} />
+          <Stat label="Bad Fits" value={stats.badFits} />
           <Stat label="Mock calls completed" value={stats.calls} />
         </section>
 
@@ -399,7 +401,7 @@ export function AdminDashboard() {
           <input className="control" placeholder="Search name, email, platform, experience, metrics" value={search} onChange={(event) => setSearch(event.target.value)} />
           <select className="control" value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">All statuses</option>
-            {[...applicationStatuses, ...qualificationStatuses, ...interviewStatuses, ...fitStatuses.map((item) => item.value).filter(Boolean)].map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
+            {[...applicationStatuses, ...interviewStatuses, ...fitStatuses.map((item) => item.value).filter(Boolean)].map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
           </select>
           <select className="control" value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="fit">Fit status, then newest</option>
@@ -407,7 +409,6 @@ export function AdminDashboard() {
             <option value="oldest">Oldest</option>
             <option value="score">Highest AI score</option>
             <option value="pay">Highest pay expectation</option>
-            <option value="qualified">Qualification</option>
           </select>
         </div>
 
@@ -418,6 +419,7 @@ export function AdminDashboard() {
                 <th>Review</th>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Location</th>
                 <th>Desired pay</th>
                 <th>Fit status</th>
                 <th>Interview status</th>
@@ -435,6 +437,7 @@ export function AdminDashboard() {
                   <td><button className="btn btn-secondary btn-small" onClick={() => openApplicant(applicant.id)}>Review</button></td>
                   <td><strong>{applicant.full_name || "Unnamed"}</strong><br /><span className="media-meta">{applicant.preferred_name || ""}</span></td>
                   <td>{applicant.normalized_email}</td>
+                  <td>{formatApplicantLocation(applicant)}</td>
                   <td>{applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""}</td>
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
                   <td>{formatStatusLabel(applicant.interview_status || "not_scheduled")}</td>
@@ -473,29 +476,11 @@ export function AdminDashboard() {
                 <button className="btn btn-secondary btn-small" onClick={() => setSelected(null)}>Close</button>
               </div>
               <div className="admin-detail-body">
-                <div className="admin-actions">
-                  <button className="btn btn-secondary" onClick={() => updateStatus({ qualificationStatus: "qualified" })}>Qualify</button>
-                  <button className="btn btn-secondary" onClick={() => updateStatus({ qualificationStatus: "manual_review" })}>Manual review</button>
-                  <button className="btn btn-secondary" onClick={() => updateStatus({ qualificationStatus: "not_qualified" })}>Disqualify</button>
-                  <button className="btn btn-secondary" onClick={() => updateStatus({ reopen: true })}>Reopen</button>
-                </div>
                 <section className="admin-status-panel" aria-label="Applicant status controls">
                   <label>
                     <span>Fit status</span>
                     <select className="control" value={selected.applicant.hiring_stage_status || ""} onChange={(event) => updateStatus({ hiringStageStatus: event.target.value || null })}>
                       {fitStatuses.map((item) => <option key={item.value || "none"} value={item.value}>{item.label}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Application status</span>
-                    <select className="control" value={selected.applicant.application_status || "started"} onChange={(event) => updateStatus({ applicationStatus: event.target.value })}>
-                      {applicationStatuses.map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Qualification</span>
-                    <select className="control" value={selected.applicant.qualification_status || "manual_review"} onChange={(event) => updateStatus({ qualificationStatus: event.target.value })}>
-                      {qualificationStatuses.map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
                     </select>
                   </label>
                   <label>
@@ -508,6 +493,7 @@ export function AdminDashboard() {
                 <div className="admin-answer-grid">
                   <Answer label="Preferred name" value={selected.applicant.preferred_name} />
                   <Answer label="Desired pay" value={selected.applicant.desired_hourly_pay ? `$${selected.applicant.desired_hourly_pay}/hr` : ""} />
+                  <Answer label="Location" value={formatApplicantLocation(selected.applicant)} />
                   <Answer label="Availability" value={selected.applicant.availability_est ? `${selected.applicant.availability_est.start}-${selected.applicant.availability_est.end} ET` : ""} />
                   <Answer label="Earliest start" value={selected.applicant.earliest_start_date} />
                   <Answer label="Vocaroo" value={selected.applicant.vocaroo_url} />
@@ -540,7 +526,6 @@ export function AdminDashboard() {
                 <ReadableApplicationAnswers applicant={selected.applicant} />
                 <ReadableEngagement media={selected.media} />
                 <MockCallReviews calls={selected.mockCalls as MockCallRecord[]} />
-                <ReadableScenarioResponses scenarios={selected.scenarios} />
                 <ReadableOperationalSummary applicant={selected.applicant} events={selected.events} />
               </div>
             </div>
@@ -564,6 +549,7 @@ function ReadableApplicationAnswers({ applicant }: { applicant: ApplicantRecord 
         <ReadableField label="Full name" value={applicant.full_name} />
         <ReadableField label="Preferred name" value={applicant.preferred_name} />
         <ReadableField label="Email" value={applicant.normalized_email} />
+        <ReadableField label="Location" value={formatApplicantLocation(applicant)} />
         <ReadableField label="Desired pay" value={applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""} />
         <ReadableField label="Availability" value={applicant.availability_est ? `${applicant.availability_est.start} to ${applicant.availability_est.end} ET` : ""} />
         <ReadableField label="Earliest start date" value={formatDate(applicant.earliest_start_date)} />
@@ -711,33 +697,6 @@ function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
   );
 }
 
-function ReadableScenarioResponses({ scenarios }: { scenarios: Array<Record<string, unknown>> }) {
-  return (
-    <section className="review-section">
-      <div className="review-section-head">
-        <div>
-          <h3>Final written responses</h3>
-          <p>Any written scenario questions configured for this version of the application.</p>
-        </div>
-      </div>
-      {scenarios.length ? (
-        <div className="readable-stack">
-          {scenarios.map((item, index) => (
-            <ReadableField
-              key={String(item.id || item.question_key || item.questionKey || index)}
-              label={formatMediaKey(String(item.question_key || item.questionKey || `Question ${index + 1}`))}
-              value={item.response}
-              wide
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="empty-text">No written scenario questions were included for this application version.</p>
-      )}
-    </section>
-  );
-}
-
 function ReadableOperationalSummary({ applicant, events }: { applicant: ApplicantRecord; events: Array<Record<string, unknown>> }) {
   const recentEvents = events.slice(0, 6);
   return (
@@ -751,7 +710,6 @@ function ReadableOperationalSummary({ applicant, events }: { applicant: Applican
       </div>
       <div className="readable-grid">
         <ReadableField label="Application status" value={formatStatusLabel(applicant.application_status)} />
-        <ReadableField label="Qualification" value={formatStatusLabel(applicant.qualification_status || "pending")} />
         <ReadableField label="Fit status" value={formatStatusLabel(applicant.hiring_stage_status || "none")} />
         <ReadableField label="Interview status" value={formatStatusLabel(applicant.interview_status)} />
         <ReadableField label="Started" value={formatDateTime(applicant.started_at)} />
@@ -935,6 +893,11 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     resume_file_size: fields.resumeFileSize || null,
     resume_file_type: fields.resumeFileType || null,
     resume_uploaded_at: null,
+    location_city: submission.location?.city || null,
+    location_region: submission.location?.region || null,
+    location_country: submission.location?.country || null,
+    location_timezone: submission.location?.timezone || null,
+    location_metadata: submission.location || null,
     application_status: completed ? "application_completed" : "started",
     qualification_status: completed ? "manual_review" : null,
     internal_score: null,
@@ -986,6 +949,13 @@ function getSortTime(applicant: ApplicantRecord) {
   const value = applicant.submitted_at || applicant.started_at || applicant.created_at || applicant.updated_at;
   const parsed = new Date(value).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatApplicantLocation(applicant: ApplicantRecord) {
+  const parts = [applicant.location_city, applicant.location_region, applicant.location_country]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(", ") : "";
 }
 
 function getCallScore(call: MockCallRecord) {
@@ -1153,17 +1123,17 @@ function formatStatusLabel(value: string) {
 }
 
 function toCsv(applicants: ApplicantRecord[]) {
-  const headers = ["Name", "Preferred name", "Email", "Desired pay", "Availability", "Start date", "Experience", "Status", "Qualification", "Fit status", "Interview", "Submitted"];
+  const headers = ["Name", "Preferred name", "Email", "Location", "Desired pay", "Availability", "Start date", "Experience", "Status", "Fit status", "Interview", "Submitted"];
   const rows = applicants.map((a) => [
     a.full_name || "",
     a.preferred_name || "",
     a.normalized_email,
+    formatApplicantLocation(a),
     a.desired_hourly_pay ? `$${a.desired_hourly_pay}/hr` : "",
     a.availability_est ? `${a.availability_est.start}-${a.availability_est.end} ET` : "",
     a.earliest_start_date || "",
     a.appointment_setting_experience || "",
     a.application_status,
-    a.qualification_status || "",
     formatStatusLabel(a.hiring_stage_status || ""),
     a.interview_status,
     a.submitted_at || ""

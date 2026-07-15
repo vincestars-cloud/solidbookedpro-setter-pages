@@ -18,6 +18,11 @@ create table if not exists sbp_setter_applicants (
   resume_file_size integer,
   resume_file_type text,
   resume_uploaded_at timestamptz,
+  location_city text,
+  location_region text,
+  location_country text,
+  location_timezone text,
+  location_metadata jsonb,
   application_status text not null default 'started',
   qualification_status text check (qualification_status in ('qualified', 'manual_review', 'not_qualified')),
   internal_score integer,
@@ -45,7 +50,12 @@ alter table sbp_setter_applicants
   add column if not exists resume_file_name text,
   add column if not exists resume_file_size integer,
   add column if not exists resume_file_type text,
-  add column if not exists resume_uploaded_at timestamptz;
+  add column if not exists resume_uploaded_at timestamptz,
+  add column if not exists location_city text,
+  add column if not exists location_region text,
+  add column if not exists location_country text,
+  add column if not exists location_timezone text,
+  add column if not exists location_metadata jsonb;
 
 create table if not exists sbp_setter_resume_files (
   applicant_id uuid primary key references sbp_setter_applicants(id) on delete cascade,

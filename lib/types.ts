@@ -36,6 +36,11 @@ export type ApplicantRecord = {
   resume_file_size: number | null;
   resume_file_type: string | null;
   resume_uploaded_at: string | null;
+  location_city: string | null;
+  location_region: string | null;
+  location_country: string | null;
+  location_timezone: string | null;
+  location_metadata: Record<string, unknown> | null;
   application_status: ApplicationStatus;
   qualification_status: QualificationStatus | null;
   internal_score: number | null;
