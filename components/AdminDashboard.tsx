@@ -39,6 +39,33 @@ type ResumePayload = {
   uploadedAt?: string;
 };
 
+type MockCallRecord = Record<string, any> & {
+  mock_call_number?: number;
+  mockCallNumber?: number;
+  status?: string;
+  duration_seconds?: number;
+  durationSeconds?: number;
+  backend_score?: number;
+  backendScore?: number;
+  transcript?: string;
+  recording_url?: string;
+  recordingUrl?: string;
+  summary?: string;
+  structured_output?: Record<string, any> | null;
+  structuredOutput?: Record<string, any> | null;
+};
+
+type ObjectionMoment = {
+  objection: string;
+  candidateResponse: string;
+  judgment: string;
+  label?: string;
+  score?: number | string;
+  timestamp?: string;
+  recommendedMove?: string;
+  advisorLens?: string;
+};
+
 export function AdminDashboard() {
   const [token, setToken] = useState("");
   const [applicants, setApplicants] = useState<ApplicantRecord[]>([]);
@@ -77,6 +104,7 @@ export function AdminDashboard() {
     list.sort((a, b) => {
       if (sort === "oldest") return new Date(a.started_at).getTime() - new Date(b.started_at).getTime();
       if (sort === "pay") return Number(b.desired_hourly_pay || 0) - Number(a.desired_hourly_pay || 0);
+      if (sort === "score") return getApplicantScore(b) - getApplicantScore(a);
       if (sort === "qualified") return String(a.qualification_status).localeCompare(String(b.qualification_status));
       return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
     });
@@ -326,6 +354,7 @@ export function AdminDashboard() {
           <select className="control" value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
+            <option value="score">Highest AI score</option>
             <option value="pay">Highest pay expectation</option>
             <option value="qualified">Qualification</option>
           </select>
@@ -343,6 +372,7 @@ export function AdminDashboard() {
                 <th>Experience summary</th>
                 <th>Status</th>
                 <th>Qualification</th>
+                <th>AI score</th>
                 <th>Mock calls</th>
                 <th>Interview</th>
                 <th>Submitted</th>
@@ -360,6 +390,7 @@ export function AdminDashboard() {
                   <td>{truncate(applicant.appointment_setting_experience || applicant.past_metrics || "", 110)}</td>
                   <td><span className="pill">{applicant.application_status}</span></td>
                   <td><span className="pill">{applicant.qualification_status || "pending"}</span></td>
+                  <td>{formatScore(getApplicantScore(applicant))}</td>
                   <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
                   <td>{applicant.interview_status}</td>
                   <td>{applicant.submitted_at ? new Date(applicant.submitted_at).toLocaleString() : ""}</td>
@@ -421,7 +452,8 @@ export function AdminDashboard() {
               <div className="admin-detail-body">
                 <Detail title="Application answers" value={selected.applicant} />
                 <Detail title="Call-library engagement" value={selected.media} />
-                <Detail title="Mock-call recordings, transcripts, summaries, and structured outputs" value={selected.mockCalls} />
+                <MockCallReviews calls={selected.mockCalls as MockCallRecord[]} />
+                <Detail title="Raw mock-call records" value={selected.mockCalls} />
                 <Detail title="Scenario answers" value={selected.scenarios} />
                 <Detail title="Step timing, abandonment, qualification outcome, hard flags, internal score" value={{ events: selected.events, hardFlags: selected.applicant.hard_flags, internalScore: selected.applicant.internal_score, abandonmentPoint: selected.applicant.abandoned_at_step, qualificationOutcome: selected.applicant.qualification_status }} />
                 <Detail title="Interview details and hiring-stage status" value={{ interview: selected.applicant.interview_details, interviewStatus: selected.applicant.interview_status, hiringStageStatus: selected.applicant.hiring_stage_status }} />
@@ -432,6 +464,113 @@ export function AdminDashboard() {
         )}
       </div>
     </main>
+  );
+}
+
+function MockCallReviews({ calls }: { calls: MockCallRecord[] }) {
+  if (!calls.length) {
+    return (
+      <section className="mock-review-panel">
+        <div className="mock-review-head">
+          <div>
+            <h3>AI objection review</h3>
+            <p>No mock calls have been saved yet.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const sortedCalls = [...calls].sort((a, b) => Number(a.mock_call_number || a.mockCallNumber || 0) - Number(b.mock_call_number || b.mockCallNumber || 0));
+  const scoredCalls = sortedCalls.filter((call) => getCallScore(call) > 0);
+  const averageScore = scoredCalls.length ? Math.round(scoredCalls.reduce((sum, call) => sum + getCallScore(call), 0) / scoredCalls.length) : 0;
+
+  return (
+    <section className="mock-review-panel">
+      <div className="mock-review-head">
+        <div>
+          <h3>AI objection review</h3>
+          <p>Prospect objection, applicant response, and the judging note from the scorer.</p>
+        </div>
+        <span className="score-chip">{averageScore ? `${averageScore}/100 avg` : "Awaiting AI score"}</span>
+      </div>
+
+      <div className="mock-review-list">
+        {sortedCalls.map((call) => {
+          const number = call.mock_call_number || call.mockCallNumber || "?";
+          const score = getCallScore(call);
+          const structured = getStructuredOutput(call);
+          const moments = extractObjectionMoments(structured);
+          const transcript = String(call.transcript || "");
+          const recordingUrl = String(call.recording_url || call.recordingUrl || "");
+          return (
+            <article className="mock-review-card" key={`${number}-${call.vapi_call_id || call.vapiCallId || "call"}`}>
+              <div className="mock-review-card-head">
+                <div>
+                  <h4>Mock Call {number}</h4>
+                  <p>{[call.status, formatDuration(call.duration_seconds || call.durationSeconds)].filter(Boolean).join(" · ")}</p>
+                </div>
+                <span className="score-chip score-chip-dark">{score ? `${score}/100` : "No score"}</span>
+              </div>
+
+              {call.summary && <p className="call-summary">{String(call.summary)}</p>}
+
+              <div className="review-actions">
+                {recordingUrl && <a className="btn btn-secondary btn-small" href={recordingUrl} target="_blank" rel="noreferrer">Open recording</a>}
+                {call.vapi_call_id && <span className="media-meta">Vapi call: {String(call.vapi_call_id)}</span>}
+              </div>
+
+              <div className="objection-list">
+                {moments.length ? (
+                  moments.map((moment, index) => (
+                    <div className="objection-card" key={`${number}-moment-${index}`}>
+                      <div className="objection-card-top">
+                        <span>{moment.label || "Objection moment"}</span>
+                        {moment.score !== undefined && <strong>{moment.score}/100</strong>}
+                      </div>
+                      {moment.timestamp && <small>{moment.timestamp}</small>}
+                      <QuoteBlock label="Prospect said" value={moment.objection} />
+                      <QuoteBlock label="Applicant replied" value={moment.candidateResponse} highlight />
+                      <QuoteBlock label="AI judge note" value={moment.judgment} />
+                      {moment.recommendedMove && <QuoteBlock label="Better move" value={moment.recommendedMove} />}
+                      {moment.advisorLens && <small className="advisor-lens">{moment.advisorLens}</small>}
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-review">
+                    No objection-response review has been saved for this call yet. Once the Vapi/n8n scorer writes <code>objection_moments</code> to the call output, the applicant&apos;s exact responses will appear here.
+                  </div>
+                )}
+              </div>
+
+              {transcript && (
+                <details className="transcript-block">
+                  <summary>Transcript</summary>
+                  <p>{transcript}</p>
+                </details>
+              )}
+
+              {structured && (
+                <details className="transcript-block">
+                  <summary>Raw AI scorecard</summary>
+                  <pre>{JSON.stringify(structured, null, 2)}</pre>
+                </details>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function QuoteBlock({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  if (!value) return null;
+  return (
+    <div className={`quote-block ${highlight ? "quote-highlight" : ""}`}>
+      <span>{label}</span>
+      <p>{value}</p>
+    </div>
   );
 }
 
@@ -558,6 +697,79 @@ function getMockCallsCompleted(applicantId: string, applicants: ApplicantRecord[
   return (submission?.mockCalls || []).filter((call) => call.status === "completed").length;
 }
 
+function getApplicantScore(applicant: ApplicantRecord) {
+  const withAggregates = applicant as ApplicantRecord & { mock_average_score?: number; mockAverageScore?: number };
+  return Number(withAggregates.mock_average_score || withAggregates.mockAverageScore || applicant.internal_score || 0);
+}
+
+function getCallScore(call: MockCallRecord) {
+  const structured = getStructuredOutput(call);
+  return Number(
+    call.backend_score ||
+      call.backendScore ||
+      structured?.overall_score ||
+      structured?.overallScore ||
+      structured?.score ||
+      structured?.scorecard?.overall_score ||
+      structured?.scorecard?.overallScore ||
+      0
+  );
+}
+
+function getStructuredOutput(call: MockCallRecord) {
+  const raw = call.structured_output || call.structuredOutput || null;
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { raw };
+    }
+  }
+  return raw;
+}
+
+function extractObjectionMoments(structured: Record<string, any> | null): ObjectionMoment[] {
+  if (!structured) return [];
+  const candidates = [
+    structured.objection_moments,
+    structured.objectionMoments,
+    structured.candidate_objection_responses,
+    structured.candidateObjectionResponses,
+    structured.response_review,
+    structured.responseReview,
+    structured.moments,
+    structured.scorecard?.objection_moments,
+    structured.scorecard?.objectionMoments,
+    structured.scorecard?.moments,
+    structured.analysis?.objection_moments,
+    structured.analysis?.objectionMoments,
+    structured.call_review?.objection_moments,
+    structured.callReview?.objectionMoments
+  ];
+  const rawMoments = candidates.find((value) => Array.isArray(value));
+  if (!Array.isArray(rawMoments)) return [];
+  return rawMoments.map((item) => ({
+    objection: pickString(item, ["objection", "prospect_objection", "prospectObjection", "prospect_line", "prospectLine", "owner_line", "ownerLine", "trigger", "quote"]),
+    candidateResponse: pickString(item, ["candidate_response", "candidateResponse", "applicant_response", "applicantResponse", "setter_response", "setterResponse", "response", "reply"]),
+    judgment: pickString(item, ["judgment", "judge_note", "judgeNote", "analysis", "feedback", "coaching_note", "coachingNote", "why_it_matters", "whyItMatters"]),
+    label: pickString(item, ["label", "category", "objection_type", "objectionType", "skill_label", "skillLabel", "flag"]),
+    score: item.score ?? item.response_score ?? item.responseScore ?? item.moment_score ?? item.momentScore,
+    timestamp: pickString(item, ["timestamp", "time", "at", "offset"]),
+    recommendedMove: pickString(item, ["recommended_move", "recommendedMove", "better_move", "betterMove", "ideal_response", "idealResponse"]),
+    advisorLens: pickString(item, ["advisor_lens", "advisorLens", "framework", "sales_lens", "salesLens"])
+  }));
+}
+
+function pickString(source: Record<string, any>, keys: string[]) {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return "";
+}
+
 function truncate(value: string, length: number) {
   return value.length > length ? `${value.slice(0, length - 1)}...` : value;
 }
@@ -581,6 +793,17 @@ function formatFileSize(bytes: number) {
     unitIndex += 1;
   }
   return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatDuration(seconds?: number) {
+  if (!seconds) return "";
+  const minutes = Math.floor(seconds / 60);
+  const remaining = Math.round(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${remaining}`;
+}
+
+function formatScore(score: number) {
+  return score ? `${Math.round(score)}/100` : "";
 }
 
 function toCsv(applicants: ApplicantRecord[]) {

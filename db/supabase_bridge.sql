@@ -444,11 +444,19 @@ begin
   end if;
 
   if action = 'admin_list' then
-    select coalesce(jsonb_agg(to_jsonb(a) || jsonb_build_object('mock_calls_completed', coalesce(mc.completed_count, 0)) order by a.started_at desc), '[]'::jsonb)
+    select coalesce(jsonb_agg(to_jsonb(a) || jsonb_build_object(
+      'mock_calls_completed', coalesce(mc.completed_count, 0),
+      'mock_average_score', coalesce(mc.average_score, a.internal_score),
+      'mock_scored_calls', coalesce(mc.scored_count, 0)
+    ) order by coalesce(mc.average_score, a.internal_score, 0) desc, a.started_at desc), '[]'::jsonb)
     into rows_json
     from public.sbp_setter_applicants a
     left join (
-      select applicant_id, count(*) filter (where status = 'completed') as completed_count
+      select
+        applicant_id,
+        count(*) filter (where status = 'completed') as completed_count,
+        round(avg(backend_score) filter (where backend_score is not null))::integer as average_score,
+        count(*) filter (where backend_score is not null) as scored_count
       from public.sbp_setter_mock_calls
       group by applicant_id
     ) mc on mc.applicant_id = a.id;
