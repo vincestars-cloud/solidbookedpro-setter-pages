@@ -53,6 +53,7 @@ const emptyFields: Partial<ApplicationFields> = {
 
 const scenarioIntro =
   "You have not received our exact script, and we do not expect you to know company-specific answers. These role plays are designed to evaluate common appointment-setting skills such as communication, confidence, listening, judgment, objection handling, and asking for the next step.";
+const VAPI_CLIENT_GUARD_VERSION = "vapi-guard-2026-07-15-2";
 const staticPagesMode = process.env.NEXT_PUBLIC_STATIC_PAGES_MODE === "1";
 const duplicateApplicationMessage =
   "An application has already been started or submitted using this email address. Please use the same device to continue, or contact us if you need assistance.";
@@ -521,14 +522,21 @@ export function ApplicationFunnel({ config }: Props) {
         variableValues: {
           application_id: sessionId,
           preferred_name: fields.preferredName || "",
-          mock_call_number: String(mockCallNumber)
+          mock_call_number: String(mockCallNumber),
+          client_guard_version: VAPI_CLIENT_GUARD_VERSION
         },
         metadata: {
           application_id: sessionId,
           mock_call_number: mockCallNumber,
-          source: "solidbooked-pro-setter-application"
+          source: "solidbooked-pro-setter-application",
+          client_guard_version: VAPI_CLIENT_GUARD_VERSION,
+          assistant_id: assistantId
         }
       });
+      if ((call as any)?.assistantId && (call as any).assistantId !== assistantId) {
+        await vapi.stop().catch(() => undefined);
+        throw new Error("The mock call started with the wrong assistant. Refresh and try again.");
+      }
       if ((call as any)?.id) updateMock(mockCallNumber, { vapiCallId: (call as any).id });
     } catch (error) {
       callStartInProgress.current = false;
