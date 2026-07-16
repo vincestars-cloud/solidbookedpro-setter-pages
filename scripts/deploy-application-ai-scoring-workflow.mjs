@@ -112,7 +112,6 @@ function scoreApplicationHeuristic(applicant, resumeScore) {
   let reliabilityScore = 0;
   if (String(applicant.full_name || '').trim() && String(applicant.normalized_email || '').includes('@')) reliabilityScore += 1;
   if (Number(applicant.desired_hourly_pay || 0) >= 3 && Number(applicant.desired_hourly_pay || 0) <= 16) reliabilityScore += 1;
-  if (applicant.availability_est && applicant.availability_est.start && applicant.availability_est.end) reliabilityScore += 1;
   if (applicant.vocaroo_url) reliabilityScore += 1;
   if (combined.trim().length >= 220) reliabilityScore += 1;
 
@@ -246,7 +245,7 @@ const packet = {
     past_metrics: '0-20: specific numbers such as calls, conversations, appointments booked, show rates, quotas, conversion rates. Strong metrics beat polished wording. Vague claims score low.',
     crm_tools: '0-8: relevant CRM, dialer, scheduling, tracking, prospecting tool familiarity.',
     industries_fit: '0-7: experience with local service, B2B, marketing, lead gen, websites, high-volume phone roles, or transferable offers.',
-    reliability_clarity: '0-5: coherent answers, realistic schedule/pay expectations, consistency, professionalism, coachability, and no obvious contradictions.'
+    reliability_clarity: '0-5: coherent answers, realistic pay expectations, consistency, professionalism, coachability, and no obvious contradictions. Do not score or penalize work availability here.'
   }
 };
 
@@ -264,7 +263,7 @@ const openAiResponse = await helpers.httpRequest({
     messages: [
       {
         role: 'system',
-        content: 'You are a strict hiring evaluator for a remote appointment setter role, using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical outbound B2B appointment setting. Score only the application and resume packet, not mock-call transcripts. Reward evidence of real outbound reps: cold/warm calling, staying in uncomfortable objection moments, follow-up discipline, CRM/dialer use, measurable appointment production, show-rate awareness, phone stamina, coachability, and clear truthful communication. Do not over-reward polished resume language without numbers or proof. Penalize vague answers, no measurable proof, customer-service-only experience, job hopping without context, inflated claims, weak availability/pay mismatch, and obvious contradictions. Date context matters: use the provided current_date and days_until_earliest_start_date. If earliest_start_date_is_acceptable is true, do not list start date as a concern or risk flag. Return only valid JSON.'
+        content: 'You are a strict hiring evaluator for a remote appointment setter role, using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical outbound B2B appointment setting. Score only the application and resume packet, not mock-call transcripts. Reward evidence of real outbound reps: cold/warm calling, staying in uncomfortable objection moments, follow-up discipline, CRM/dialer use, measurable appointment production, show-rate awareness, phone stamina, coachability, and clear truthful communication. Do not over-reward polished resume language without numbers or proof. Penalize vague answers, no measurable proof, customer-service-only experience, job hopping without context, inflated claims, unrealistic pay expectations, and obvious contradictions. Do not penalize or score work availability. Date context matters: use the provided current_date and days_until_earliest_start_date. If earliest_start_date_is_acceptable is true, do not list start date as a concern or risk flag. Return only valid JSON.'
       },
       {
         role: 'user',

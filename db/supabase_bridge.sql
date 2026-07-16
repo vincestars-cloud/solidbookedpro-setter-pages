@@ -451,7 +451,7 @@ begin
     end if;
 
     select
-      coalesce(count(*) filter (where status = 'completed'), 0)::integer,
+      coalesce(count(*) filter (where status = 'completed' or vapi_call_id is not null), 0)::integer,
       coalesce(count(*) filter (where backend_score is not null), 0)::integer,
       coalesce(avg(backend_score) filter (where backend_score is not null), 0)
     into completed_calls, mock_scored_calls, mock_average_score
@@ -661,7 +661,8 @@ begin
     select count(*)
     into completed_calls
     from public.sbp_setter_mock_calls
-    where applicant_id = applicant_uuid and status = 'completed';
+    where applicant_id = applicant_uuid
+      and (status = 'completed' or vapi_call_id is not null);
 
     select exists (
       select 1
@@ -746,10 +747,6 @@ begin
     if nullif(fields->>'earliestStartDate', '') is null or (fields->>'earliestStartDate')::date < current_date then
       hard_flags_arr := array_append(hard_flags_arr, 'start_date_not_acceptable');
     end if;
-    if overlap_hours < 5 then
-      hard_flags_arr := array_append(hard_flags_arr, 'availability_outside_required_window');
-    end if;
-
     resume_score_value := case when resume_uploaded then least(coalesce(resume_score_value, 2), 10) else 0 end;
 
     if length(trim(coalesce(fields->>'appointmentSettingExperience', ''))) >= 300 then
@@ -846,7 +843,15 @@ begin
 
     if array_length(hard_flags_arr, 1) is not null then
       result_status := 'not_qualified';
-    elsif score >= 75 and (mock_scored_calls = 0 or mock_average_score >= 70) then
+    elsif score >= 75 and completed_calls = 3 and (
+      mock_average_score >= 45
+      or exists (
+        select 1
+        from public.sbp_setter_mock_calls qualifying_call
+        where qualifying_call.applicant_id = applicant_uuid
+          and qualifying_call.backend_score >= 60
+      )
+    ) then
       result_status := 'qualified';
     else
       result_status := 'manual_review';
