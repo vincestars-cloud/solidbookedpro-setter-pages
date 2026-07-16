@@ -70,6 +70,62 @@ function removeStartDateFalsePositive(value, startDateIsAcceptable) {
   return value;
 }
 
+function firstNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function lowerText(...values) {
+  return values.map((value) => String(value || '')).join('\\n').toLowerCase();
+}
+
+function scoreApplicationHeuristic(applicant, resumeScore) {
+  const experience = lowerText(applicant.appointment_setting_experience);
+  const metrics = lowerText(applicant.past_metrics);
+  const crm = lowerText(applicant.crm_platforms);
+  const industries = lowerText(applicant.industries);
+  const combined = lowerText(experience, metrics, crm, industries);
+
+  let experienceScore = 0;
+  if (experience.trim().length >= 80) experienceScore += 5;
+  if (experience.trim().length >= 220) experienceScore += 3;
+  if (experience.match(/(cold call|cold-call|appointment|setter|outbound|sales|objection|follow[ -]?up|dialer|prospect|book|quota|show rate|lead generation|sdr|bdr)/)) experienceScore += 10;
+  if (experience.match(/(warm|cold|rapport|qualified|crm|transfer|presentation|business owner)/)) experienceScore += 2;
+
+  let metricsScore = 0;
+  if (metrics.match(/\\d/)) metricsScore += 8;
+  if (metrics.match(/(%|[0-9].*[0-9]|calls?|appointments?|meetings?|booked|quota|show rate|conversion|conversation)/)) metricsScore += 7;
+  if (metrics.match(/(appointment|book|show rate|close rate|call|conversation|quota|demo|meeting|held|set|conversion|kpi|daily|weekly|monthly)/)) metricsScore += 5;
+
+  let crmScore = 0;
+  if (crm.trim().length >= 8) crmScore += 3;
+  if (crm.match(/(crm|gohighlevel|highlevel|hubspot|salesforce|pipedrive|close|dialer|calendly|apollo|salesloft|outreach|zoho|follow up boss|zendesk)/)) crmScore += 5;
+
+  let industriesScore = 0;
+  if (industries.trim().length >= 12) industriesScore += 4;
+  if (combined.match(/(local|service|b2b|real estate|roof|landscap|home service|medspa|aesthetic|healthcare|insurance|marketing|lead gen|website|junk removal|utilities)/)) industriesScore += 3;
+
+  let reliabilityScore = 0;
+  if (String(applicant.full_name || '').trim() && String(applicant.normalized_email || '').includes('@')) reliabilityScore += 1;
+  if (Number(applicant.desired_hourly_pay || 0) >= 3 && Number(applicant.desired_hourly_pay || 0) <= 16) reliabilityScore += 1;
+  if (applicant.availability_est && applicant.availability_est.start && applicant.availability_est.end) reliabilityScore += 1;
+  if (applicant.vocaroo_url) reliabilityScore += 1;
+  if (combined.trim().length >= 220) reliabilityScore += 1;
+
+  return {
+    resume: clamp(resumeScore, 0, 10),
+    appointment_setting_experience: clamp(experienceScore, 0, 20),
+    past_metrics: clamp(metricsScore, 0, 20),
+    crm_tools: clamp(crmScore, 0, 8),
+    industries_fit: clamp(industriesScore, 0, 7),
+    reliability_clarity: clamp(reliabilityScore, 0, 5)
+  };
+}
+
 async function bridge(action, payload) {
   const response = await helpers.httpRequest({
     method: 'POST',
@@ -270,30 +326,59 @@ if (startDateIsAcceptable) {
 }
 
 const breakdown = ai.score_breakdown || ai.scoreBreakdown || {};
-const scoreBreakdown = {
-  resume: clamp(breakdown.resume, 0, 10),
-  appointment_setting_experience: clamp(breakdown.appointment_setting_experience, 0, 20),
-  past_metrics: clamp(breakdown.past_metrics, 0, 20),
-  crm_tools: clamp(breakdown.crm_tools, 0, 8),
-  industries_fit: clamp(breakdown.industries_fit, 0, 7),
-  reliability_clarity: clamp(breakdown.reliability_clarity, 0, 5)
+const resumeScore = clamp(
+  firstNumber(ai.resume_score_10, ai.resumeScore10, ai.resumeScore, breakdown.resume, breakdown.resume_score, resume.resumeScore),
+  0,
+  10
+);
+const heuristicBreakdown = scoreApplicationHeuristic(applicant, resumeScore);
+let scoreBreakdown = {
+  resume: clamp(firstNumber(breakdown.resume, breakdown.resume_score, breakdown.resumeScore, resumeScore), 0, 10),
+  appointment_setting_experience: clamp(firstNumber(
+    breakdown.appointment_setting_experience,
+    breakdown.appointmentSettingExperience,
+    breakdown.appointment_setting_or_cold_calling_experience,
+    breakdown.experience,
+    breakdown.sales_experience,
+    breakdown.salesExperience
+  ), 0, 20),
+  past_metrics: clamp(firstNumber(breakdown.past_metrics, breakdown.pastMetrics, breakdown.metrics, breakdown.metrics_quality, breakdown.metricsQuality), 0, 20),
+  crm_tools: clamp(firstNumber(breakdown.crm_tools, breakdown.crmTools, breakdown.crm, breakdown.tools), 0, 8),
+  industries_fit: clamp(firstNumber(breakdown.industries_fit, breakdown.industriesFit, breakdown.industries, breakdown.industry_fit, breakdown.industryFit), 0, 7),
+  reliability_clarity: clamp(firstNumber(breakdown.reliability_clarity, breakdown.reliabilityClarity, breakdown.reliability, breakdown.clarity, breakdown.professionalism), 0, 5)
 };
-const applicationScore = clamp(
+const rawBreakdownTotal =
   scoreBreakdown.resume +
     scoreBreakdown.appointment_setting_experience +
     scoreBreakdown.past_metrics +
     scoreBreakdown.crm_tools +
     scoreBreakdown.industries_fit +
-    scoreBreakdown.reliability_clarity,
-  0,
-  70
-);
-const resumeScore = clamp(ai.resume_score_10 ?? breakdown.resume ?? ai.resumeScore, 0, 10);
+    scoreBreakdown.reliability_clarity;
+const declaredApplicationScore = firstNumber(ai.application_score_70, ai.applicationScore70, ai.applicationScore, ai.score, ai.overall_score, ai.overallScore);
+if (rawBreakdownTotal <= resumeScore) {
+  scoreBreakdown = {
+    resume: Math.max(scoreBreakdown.resume, heuristicBreakdown.resume),
+    appointment_setting_experience: Math.max(scoreBreakdown.appointment_setting_experience, heuristicBreakdown.appointment_setting_experience),
+    past_metrics: Math.max(scoreBreakdown.past_metrics, heuristicBreakdown.past_metrics),
+    crm_tools: Math.max(scoreBreakdown.crm_tools, heuristicBreakdown.crm_tools),
+    industries_fit: Math.max(scoreBreakdown.industries_fit, heuristicBreakdown.industries_fit),
+    reliability_clarity: Math.max(scoreBreakdown.reliability_clarity, heuristicBreakdown.reliability_clarity)
+  };
+}
+const breakdownTotal =
+  scoreBreakdown.resume +
+  scoreBreakdown.appointment_setting_experience +
+  scoreBreakdown.past_metrics +
+  scoreBreakdown.crm_tools +
+  scoreBreakdown.industries_fit +
+  scoreBreakdown.reliability_clarity;
+const applicationScore = clamp(Math.max(breakdownTotal, declaredApplicationScore || 0), 0, 70);
 const analysis = {
   ...ai,
   application_score_70: applicationScore,
   resume_score_10: resumeScore,
   score_breakdown: scoreBreakdown,
+  deterministic_fallback_used: rawBreakdownTotal <= resumeScore,
   model: 'gpt-4o-mini',
   scored_at: new Date().toISOString()
 };

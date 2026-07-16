@@ -1127,8 +1127,10 @@ function getApplicantScore(applicant: ApplicantRecord) {
     getOptionalScore(applicant.internal_score) ??
     getOptionalScore(withAggregates.overall_score) ??
     getOptionalScore(withAggregates.overallScore) ??
+    getOptionalScore(applicant.ai_application_score) ??
     getOptionalScore(applicant.mock_average_score) ??
     getOptionalScore(withAggregates.mockAverageScore) ??
+    getOptionalScore(applicant.resume_score) ??
     0
   );
 }

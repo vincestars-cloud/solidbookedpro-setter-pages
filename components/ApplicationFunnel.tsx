@@ -117,6 +117,7 @@ export function ApplicationFunnel({ config }: Props) {
   const callStartInProgress = useRef(false);
   const callStartedAt = useRef<number>(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const applicationScoreRequested = useRef(new Set<string>());
 
   const progressPercent = Math.round((currentStep / totalSteps) * 100);
   const tomorrow = useMemo(() => {
@@ -345,10 +346,12 @@ export function ApplicationFunnel({ config }: Props) {
       focusValidationSummary();
       return;
     }
+    const sessionId = applicantId || await ensureSession(fields.email);
     setCurrentStep(step);
     setHighestStep((prev) => Math.max(prev, step));
     track("step_completed", { step: currentStep, nextStep: step });
     track("step_opened", { step });
+    if (currentStep === 1 && sessionId) queueApplicationScore(sessionId, step);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -687,6 +690,30 @@ export function ApplicationFunnel({ config }: Props) {
     }
   }
 
+  function queueApplicationScore(currentApplicantId: string, nextStep = currentStep) {
+    if (!staticPagesMode || !setterBridgeUrl || !currentApplicantId || applicationScoreRequested.current.has(currentApplicantId)) return;
+    applicationScoreRequested.current.add(currentApplicantId);
+    const state = {
+      applicantId: currentApplicantId,
+      started,
+      currentStep: nextStep,
+      highestStep: Math.max(highestStep, nextStep),
+      fields,
+      location: applicantLocation,
+      callLibrary: [...callLibrary, postScheduleVideo],
+      postScheduleVideo,
+      interviewScheduled,
+      mockCalls,
+      scenarios: config.content.scenarioQuestions.map((q) => ({ questionKey: q.key, response: scenarios[q.key] || "" }))
+    };
+    setterBridgeRequest("autosave", state)
+      .then(() => scoreApplicationWithAi(currentApplicantId))
+      .then(() => track("ai_application_score_requested", { applicantId: currentApplicantId, source: "step_1_background" }))
+      .catch(() => {
+        applicationScoreRequested.current.delete(currentApplicantId);
+      });
+  }
+
   async function waitForMockCallScoring(currentApplicantId: string) {
     const completed = mockCalls.filter((call) => call.status === "completed").length;
     if (!setterBridgeUrl || completed < 3) return;
@@ -814,6 +841,8 @@ export function ApplicationFunnel({ config }: Props) {
       updateField("resumeFileSize", file.size as any);
       updateField("resumeFileType", file.type as any);
       track("resume_uploaded", { fileName: file.name, fileType: file.type, fileSize: file.size, applicantId: sessionId });
+      applicationScoreRequested.current.delete(sessionId);
+      if (currentStep > 1) queueApplicationScore(sessionId, currentStep);
     } catch (error) {
       setResumeUploadState("");
       setErrors((prev) => ({
