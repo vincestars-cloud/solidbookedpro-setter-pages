@@ -291,6 +291,10 @@ textarea.control { min-height: 130px; resize: vertical; }
 .mock-review-head p { margin-bottom: 0; color: var(--muted); font-size: 14px; }
 .score-chip { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 7px 10px; border-radius: 999px; color: var(--primary-dark); background: #edf2ff; font-size: 12px; font-weight: 950; white-space: nowrap; }
 .score-chip-dark { color: #fff; background: #111827; }
+.score-breakdown-cell { display: grid; gap: 5px; min-width: 170px; color: #1f2937; font-size: 12px; line-height: 1.25; }
+.score-breakdown-cell span { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid #edf2f7; white-space: nowrap; }
+.score-breakdown-cell span:last-child { border-bottom: 0; }
+.score-breakdown-cell strong { color: #64748b; font-size: 10px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
 .score-breakdown { margin: 14px; padding: 14px; border: 1px solid #dbeafe; border-radius: 14px; background: linear-gradient(180deg, #f8fbff, #ffffff); }
 .score-breakdown h4 { margin: 0 0 10px; font-size: 14px; color: #111827; }
 .mock-review-list { display: grid; gap: 12px; padding: 14px; }

@@ -900,6 +900,9 @@ begin
       'mock_calls_completed', coalesce(mc.completed_count, 0),
       'mock_average_score', coalesce(mc.average_score, a.internal_score),
       'mock_scored_calls', coalesce(mc.scored_count, 0),
+      'mock_call_1_score', mc.mock_call_1_score,
+      'mock_call_2_score', mc.mock_call_2_score,
+      'mock_call_3_score', mc.mock_call_3_score,
       'call_library_opened', coalesce(me.call_library_opened, 0),
       'call_library_average_percent', coalesce(round(me.call_library_average_percent)::integer, 0),
       'post_schedule_video_percent', coalesce(round(me.post_schedule_video_percent)::integer, 0),
@@ -912,7 +915,10 @@ begin
         applicant_id,
         count(*) filter (where status = 'completed') as completed_count,
         round(avg(backend_score) filter (where backend_score is not null))::integer as average_score,
-        count(*) filter (where backend_score is not null) as scored_count
+        count(*) filter (where backend_score is not null) as scored_count,
+        round(max(backend_score) filter (where mock_call_number = 1 and backend_score is not null))::integer as mock_call_1_score,
+        round(max(backend_score) filter (where mock_call_number = 2 and backend_score is not null))::integer as mock_call_2_score,
+        round(max(backend_score) filter (where mock_call_number = 3 and backend_score is not null))::integer as mock_call_3_score
       from public.sbp_setter_mock_calls
       group by applicant_id
     ) mc on mc.applicant_id = a.id

@@ -126,8 +126,14 @@ export function AdminDashboard() {
     });
     list.sort((a, b) => {
       if (sort === "fit") {
-        const fitRank = getFitStatusRank(a.hiring_stage_status) - getFitStatusRank(b.hiring_stage_status);
+        const aFitRank = getFitStatusRank(a.hiring_stage_status);
+        const bFitRank = getFitStatusRank(b.hiring_stage_status);
+        const fitRank = aFitRank - bFitRank;
         if (fitRank !== 0) return fitRank;
+        if (aFitRank === getFitStatusRank(null) && bFitRank === getFitStatusRank(null)) {
+          const scoreRank = getApplicantScore(b) - getApplicantScore(a);
+          if (scoreRank !== 0) return scoreRank;
+        }
         return getSortTime(b) - getSortTime(a);
       }
       if (sort === "oldest") return new Date(a.started_at).getTime() - new Date(b.started_at).getTime();
@@ -442,7 +448,7 @@ export function AdminDashboard() {
             {[...applicationStatuses, ...interviewStatuses, ...fitStatuses.map((item) => item.value).filter(Boolean)].map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
           </select>
           <select className="control" value={sort} onChange={(event) => setSort(event.target.value)}>
-            <option value="fit">Fit status, then newest</option>
+            <option value="fit">Fit status, then AI score</option>
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="score">Highest AI score</option>
@@ -466,7 +472,7 @@ export function AdminDashboard() {
                 <th>Interview status</th>
                 <th>Start date</th>
                 <th>Availability</th>
-                <th>AI score</th>
+                <th>AI scores</th>
                 <th>End video</th>
                 <th>Vocaroo link</th>
                 <th>Appointment setting experience</th>
@@ -487,7 +493,7 @@ export function AdminDashboard() {
                   <td>{formatStatusLabel(applicant.interview_status || "not_displayed")}</td>
                   <td>{formatDate(applicant.earliest_start_date)}</td>
                   <td>{formatAvailability(applicant.availability_est)}</td>
-                  <td>{formatScore(getApplicantScore(applicant))}</td>
+                  <td><ScoreBreakdownCell applicant={applicant} /></td>
                   <td>{formatPercent(getPostScheduleVideoPercent(applicant))}</td>
                   <td>{applicant.vocaroo_url ? <a className="table-link" href={applicant.vocaroo_url} target="_blank" rel="noreferrer">Open link</a> : ""}</td>
                   <td>{truncate(applicant.appointment_setting_experience || "", 140)}</td>
@@ -577,6 +583,28 @@ export function AdminDashboard() {
         )}
       </div>
     </main>
+  );
+}
+
+function ScoreBreakdownCell({ applicant }: { applicant: ApplicantRecord }) {
+  const scores = getScoreBreakdown(applicant);
+  const parts = [
+    { label: "Overall", value: scores.overall, denominator: 100 },
+    { label: "Resume/App", value: scores.application.value, denominator: scores.application.denominator },
+    { label: "Mock 1", value: scores.mock1, denominator: 100 },
+    { label: "Mock 2", value: scores.mock2, denominator: 100 },
+    { label: "Mock 3", value: scores.mock3, denominator: 100 }
+  ];
+
+  return (
+    <div className="score-breakdown-cell" aria-label={formatScoreBreakdownText(applicant)}>
+      {parts.map((part) => (
+        <span key={part.label}>
+          <strong>{part.label}</strong>
+          {formatScorePart(part.value, part.denominator)}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -1094,8 +1122,62 @@ function getMockCallsCompleted(applicantId: string, applicants: ApplicantRecord[
 }
 
 function getApplicantScore(applicant: ApplicantRecord) {
-  const withAggregates = applicant as ApplicantRecord & { mock_average_score?: number; mockAverageScore?: number };
-  return Number(withAggregates.mock_average_score || withAggregates.mockAverageScore || applicant.internal_score || 0);
+  const withAggregates = applicant as ApplicantRecord & { overall_score?: number; overallScore?: number; mockAverageScore?: number };
+  return (
+    getOptionalScore(applicant.internal_score) ??
+    getOptionalScore(withAggregates.overall_score) ??
+    getOptionalScore(withAggregates.overallScore) ??
+    getOptionalScore(applicant.mock_average_score) ??
+    getOptionalScore(withAggregates.mockAverageScore) ??
+    0
+  );
+}
+
+function getScoreBreakdown(applicant: ApplicantRecord) {
+  const applicationScore = getOptionalScore(applicant.ai_application_score);
+  const resumeFallback = getOptionalScore(applicant.resume_score);
+  return {
+    overall: getOptionalScore(applicant.internal_score),
+    application: {
+      value: applicationScore ?? resumeFallback,
+      denominator: applicationScore !== null && applicationScore !== undefined ? 70 : 10
+    },
+    mock1: getMockCallScore(applicant, 1),
+    mock2: getMockCallScore(applicant, 2),
+    mock3: getMockCallScore(applicant, 3)
+  };
+}
+
+function getMockCallScore(applicant: ApplicantRecord, mockCallNumber: 1 | 2 | 3) {
+  const withAggregates = applicant as ApplicantRecord & Record<string, unknown>;
+  const direct = getOptionalScore(withAggregates[`mock_call_${mockCallNumber}_score`]);
+  if (direct !== null && direct !== undefined) return direct;
+  const camel = getOptionalScore(withAggregates[`mockCall${mockCallNumber}Score`]);
+  if (camel !== null && camel !== undefined) return camel;
+  const submission = getStaticSubmissions().find((item) => item.applicantId === applicant.id);
+  const call = (submission?.mockCalls || []).find((item) => Number(item.mockCallNumber || item.mock_call_number) === mockCallNumber);
+  return getOptionalScore(call?.backendScore ?? call?.backend_score);
+}
+
+function getOptionalScore(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatScorePart(score: number | null | undefined, denominator: number) {
+  return score === null || score === undefined ? "—" : `${Math.round(score)}/${denominator}`;
+}
+
+function formatScoreBreakdownText(applicant: ApplicantRecord) {
+  const scores = getScoreBreakdown(applicant);
+  return [
+    `Overall ${formatScorePart(scores.overall, 100)}`,
+    `Resume/Application ${formatScorePart(scores.application.value, scores.application.denominator)}`,
+    `Mock Call 1 ${formatScorePart(scores.mock1, 100)}`,
+    `Mock Call 2 ${formatScorePart(scores.mock2, 100)}`,
+    `Mock Call 3 ${formatScorePart(scores.mock3, 100)}`
+  ].join(" | ");
 }
 
 function getCallLibraryAveragePercent(applicant: ApplicantRecord) {
@@ -1399,7 +1481,7 @@ function toCsv(applicants: ApplicantRecord[]) {
     "Interview status",
     "Start date",
     "Availability",
-    "AI score",
+    "AI score breakdown",
     "Mock calls completed",
     "Call-library listening %",
     "End video completion %",
@@ -1418,7 +1500,7 @@ function toCsv(applicants: ApplicantRecord[]) {
     formatStatusLabel(a.interview_status || "not_displayed"),
     formatDate(a.earliest_start_date),
     formatAvailability(a.availability_est),
-    formatScore(getApplicantScore(a)),
+    formatScoreBreakdownText(a),
     getMockCallsCompleted(a.id, applicants),
     formatPercent(getCallLibraryAveragePercent(a)),
     formatPercent(getPostScheduleVideoPercent(a)),

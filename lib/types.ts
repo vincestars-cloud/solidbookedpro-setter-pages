@@ -59,6 +59,12 @@ export type ApplicantRecord = {
   hiring_stage_status: string | null;
   call_library_average_percent?: number | null;
   call_library_opened?: number | null;
+  mock_calls_completed?: number | null;
+  mock_average_score?: number | null;
+  mock_scored_calls?: number | null;
+  mock_call_1_score?: number | null;
+  mock_call_2_score?: number | null;
+  mock_call_3_score?: number | null;
   post_schedule_video_percent?: number | null;
   post_schedule_video_completed?: boolean | null;
   abandoned_at_step: number | null;
