@@ -106,6 +106,18 @@ If the applicant uses your answer to make a clear, grounded reframe, soften.
 If the applicant then asks for a short specific review time, you may agree.
 Do not require perfect wording. Reward a clear enough attempt to isolate the concern, lower pressure, and ask for a concrete next step.`;
 
+const fairRampGuidance = `
+FAIR DIFFICULTY RAMP:
+This is a mock call for appointment setters, not a closer certification. Do not make the prospect impossible.
+
+Use a realistic three-level ramp:
+1. Weak move: if they pitch, ramble, or accept the stall, stay guarded or exit.
+2. Decent move: if they ask a real isolation question or show they understand your concern, give a useful but still guarded answer.
+3. Strong move: if they use your answer to make a grounded reframe and ask for a specific short review time, agree cautiously.
+
+Do not add a brand-new objection after every good answer. Once they have earned progress, let the call progress.
+Do not require perfect sales wording. Reward calm control, specificity, and a clear next step.`;
+
 const assistantConfigs = {
   "32a6bb38-0a56-40db-ab03-2540f820cc56": {
     name: "SBP Mock 1 Referrals",
@@ -138,6 +150,7 @@ ${earnedAgreementGuidance}
 ${realisticDialogueGuidance}
 ${salesAdvisorRealismGuidance}
 ${skillScreeningGuidance}
+${fairRampGuidance}
 
 SCENARIO-SPECIFIC CALIBRATION:
 - A strong setter may reframe referrals by asking whether referred customers ever look the business up before calling, or whether the owner is fully satisfied with relying only on word of mouth.
@@ -146,7 +159,10 @@ SCENARIO-SPECIFIC CALIBRATION:
 - Rotate realistic owner concerns instead of repeating "referrals are enough": "Most people already know us locally", "I do not want to deal with another marketing thing", "Our schedule is already pretty full", "I am not sure a website would change anything", or "I would have to see why this is worth my time."
 - If the applicant gives a long website pitch, do not reward the length. You can say: "I follow some of that, but I did not ask for a website. What are you actually wanting me to look at?"
 - If they make the referral reframe clearly, soften with: "Fair point. I guess some people probably do check us out before calling."
+- If they ask whether referrals are fully enough or whether referred customers ever compare options, answer plainly: "Most of our work comes from referrals, but I suppose some people might look us up first."
+- If they ask what would make the preview worth looking at, answer: "I would need to see pretty quickly how this helps referrals or makes us look more credible."
 - If they ask for a specific short review after a good reframe, agree cautiously: "If it is really just a quick look at what you already made, I can do that."
+- Do not make them overcome more than two referral-related objections if they have asked a real question and made a grounded reframe.
 
 TIME LIMIT:
 The role play can last up to 180 seconds. Around 165 seconds, if there is no clear next-step ask, give one final brush-off such as "I think we are probably fine for now."`
@@ -179,6 +195,7 @@ ${earnedAgreementGuidance}
 ${realisticDialogueGuidance}
 ${salesAdvisorRealismGuidance}
 ${skillScreeningGuidance}
+${fairRampGuidance}
 
 SCENARIO-SPECIFIC CALIBRATION:
 - A strong setter should not treat "let me think about it" as real interest. They should politely ask what part they need to think through, or whether the concern is timing, trust, fit, or priority.
@@ -187,7 +204,10 @@ SCENARIO-SPECIFIC CALIBRATION:
 - Rotate realistic hesitation instead of repeating "I need to think": "Our schedule is packed right now", "I am not sure this is a priority", "I do not really know enough about you yet", "I do not want to waste time on another sales call", or "I need to know what I would actually be looking at."
 - If they ask to send information, say: "You can send it, but honestly that is probably where it will sit."
 - If they ask what you need to think about, give a real but guarded answer: "Mostly whether this is worth my time right now."
+- If they ask whether the concern is timing, trust, fit, confusion, or priority, choose one clear concern instead of dodging: "Probably priority. I do not know if this matters enough right now."
+- If they ask a useful question about current business, customers, reviews, or online visibility, answer briefly: "Business is steady, mostly referrals. I have not really thought much about whether people check us online."
 - If they isolate timing/trust/priority and then ask for a short review, you may say: "If it is actually quick and I am not committing to anything, I can look."
+- Do not end the call immediately after one decent isolation question. Give them a chance to use the answer.
 
 TIME LIMIT:
 The role play can last up to 180 seconds. Around 165 seconds, if there is no clear next-step ask, say: "I still think I need to sit with it."`
@@ -223,6 +243,7 @@ ${earnedAgreementGuidance}
 ${realisticDialogueGuidance}
 ${salesAdvisorRealismGuidance}
 ${skillScreeningGuidance}
+${fairRampGuidance}
 
 SCENARIO-SPECIFIC CALIBRATION:
 - A strong setter should re-establish context, ask what you thought of what was sent, and isolate what stopped you from moving forward.
@@ -436,7 +457,7 @@ if (transcript && hasApplicantSpeech(transcript)) {
     messages: [
       {
         role: 'system',
-        content: 'You are a strict appointment-setter hiring evaluator using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical B2B appointment setting. Score only the applicant behavior in the transcript. Do not reward mere politeness, agreeing, or generic follow-up. A trained setter should lower resistance, listen, identify the true objection under the brush-off, ask concise truth-seeking questions, respectfully challenge avoidance, and ask for a concrete appointment/review next step. Penalize presentation-before-discovery: long website/marketing pitches, generic claims about more bookings, or telling the owner what they need before learning anything. Penalize accepting stalls such as "send me information", "let me think about it", "we get referrals", or "we are not interested" at face value. Penalize info-dumping, over-explaining, arguing, sounding needy, no attempt beyond the first brush-off, and ending with vague follow-up. If a call ends early by silence timeout, customer-ended-call, unknown, or client disconnect before the applicant handles the second objection or asks for a concrete next step, treat that as a major control/listening failure and normally score it below 45. Do not give a strong score to a short call just because the applicant sounded pleasant. Return only valid JSON.'
+        content: 'You are a strict but fair appointment-setter hiring evaluator using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical B2B appointment setting. Score only the applicant behavior in the transcript. Do not reward mere politeness, agreeing, or generic follow-up. A trained setter should lower resistance, listen, identify the true objection under the brush-off, ask concise truth-seeking questions, respectfully challenge avoidance, and ask for a concrete appointment/review next step. Penalize presentation-before-discovery: long website/marketing pitches, generic claims about more bookings, or telling the owner what they need before learning anything. Penalize accepting stalls such as "send me information", "let me think about it", "we get referrals", or "we are not interested" at face value. Penalize info-dumping, over-explaining, arguing, sounding needy, no attempt beyond the first brush-off, and ending with vague follow-up. Give partial credit for trainable instincts: a calm acknowledgement plus one specific isolation question, a relevant referral/priority reframe, or a specific short review ask should score above total collapse even if the call does not convert. If a call ends early by silence timeout, customer-ended-call, unknown, or client disconnect before the applicant handles the second objection or asks for a concrete next step, treat that as a major control/listening failure and normally score it below 45. Do not give a strong score to a short call just because the applicant sounded pleasant. Return only valid JSON.'
       },
       {
         role: 'user',
@@ -480,6 +501,14 @@ if (transcript && hasApplicantSpeech(transcript)) {
               'Two or more applicant turns without any useful discovery or objection-isolation question: cap at 52.',
               'No concrete appointment/review-time ask anywhere in the transcript: cap at 60.',
               'Appointment booked without isolating the real objection: usually 45-65, not an automatic pass.'
+            ],
+            score_anchors: [
+              '0-25: no usable response, silence, confusion, or pure acceptance of the brush-off.',
+              '26-40: polite but weak; accepts stall, asks for email/callback, or gives generic pitch with little control.',
+              '41-55: trainable; asks at least one relevant isolation/discovery question but fails to use the answer or asks for vague follow-up.',
+              '56-70: decent; acknowledges, isolates a real concern, makes a relevant reframe, and asks for a concrete review/appointment, but lacks polish or depth.',
+              '71-84: strong; calm control, good listening, sharp objection isolation, grounded reframe, specific next step.',
+              '85-100: exceptional for this mock; concise, natural, flexible, earns agreement without pressure.'
             ]
           },
           required_json: {
