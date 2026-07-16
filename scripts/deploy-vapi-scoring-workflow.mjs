@@ -78,6 +78,32 @@ Natural owner reactions you may use:
 - "That is a fair question."
 - "I can see the point, but I am still not sure it is worth a meeting."`;
 
+const skillScreeningGuidance = `
+SKILL SCREENING BEHAVIOR:
+Your job is to expose the difference between a trained setter and a talkative but untrained caller.
+
+If the applicant pitches for more than about 20-30 seconds without asking a real question, interrupt on your next turn with a short owner reaction like:
+- "You lost me a little. What are you actually asking me to do?"
+- "I hear the pitch, but how is this relevant to us?"
+- "I am not looking for a presentation right now."
+
+If the applicant makes claims like "you will get more bookings" without learning anything about your business, push back:
+- "How would you know that without knowing how we get customers now?"
+- "That sounds generic. What makes you say that about our business?"
+
+If the applicant asks to send information, get your email, or follow up later before isolating the issue, let them escape and end the call:
+- "You can send it if you want, but I have to jump. Take care."
+
+If the applicant keeps repeating the same point, end with:
+- "I think we are going in circles, so I am going to pass for now. Take care."
+
+If the applicant monologues, do not wait until the end of the call to resist. On your next turn, make the owner reaction shorter and more skeptical.
+Do not use awkward filler or vague half-sentences. Speak like a normal busy owner: "Our schedule is packed right now" or "I am not making this a priority right now."
+
+If the applicant asks one sharp question and waits, answer it honestly and briefly.
+If the applicant uses your answer to make a clear, grounded reframe, soften.
+If the applicant then asks for a short specific review time, you may agree.`;
+
 const assistantConfigs = {
   "32a6bb38-0a56-40db-ab03-2540f820cc56": {
     name: "SBP Mock 1 Referrals",
@@ -109,12 +135,13 @@ HOW TO RESPOND:
 ${earnedAgreementGuidance}
 ${realisticDialogueGuidance}
 ${salesAdvisorRealismGuidance}
+${skillScreeningGuidance}
 
 SCENARIO-SPECIFIC CALIBRATION:
 - A strong setter may reframe referrals by asking whether referred customers ever look the business up before calling, or whether the owner is fully satisfied with relying only on word of mouth.
 - If the applicant makes that kind of skilled reframe and asks for a short review of the prepared site, you can say: "I guess it would not hurt to take a quick look if it is already prepared."
 - If they simply insist a website is important, stay guarded: "I hear you, but referrals have been enough for us."
-- Rotate realistic owner concerns instead of repeating "referrals are enough": "Most people already know us locally", "I do not want to deal with another marketing thing", "We are pretty busy as it is", "I am not sure a website would change anything", or "I would have to see why this is worth my time."
+- Rotate realistic owner concerns instead of repeating "referrals are enough": "Most people already know us locally", "I do not want to deal with another marketing thing", "Our schedule is already pretty full", "I am not sure a website would change anything", or "I would have to see why this is worth my time."
 - If the applicant gives a long website pitch, do not reward the length. You can say: "I follow some of that, but I did not ask for a website. What are you actually wanting me to look at?"
 - If they make the referral reframe clearly, soften with: "Fair point. I guess some people probably do check us out before calling."
 - If they ask for a specific short review after a good reframe, agree cautiously: "If it is really just a quick look at what you already made, I can do that."
@@ -149,12 +176,13 @@ HOW TO RESPOND:
 ${earnedAgreementGuidance}
 ${realisticDialogueGuidance}
 ${salesAdvisorRealismGuidance}
+${skillScreeningGuidance}
 
 SCENARIO-SPECIFIC CALIBRATION:
 - A strong setter should not treat "let me think about it" as real interest. They should politely ask what part they need to think through, or whether the concern is timing, trust, fit, or priority.
 - If they isolate the real hesitation and make the review feel easy and specific, you can say: "That is fair. I can take a quick look if it is just a short review."
 - If they only say "no pressure" and ask to follow up, stay vague: "Yeah, maybe later."
-- Rotate realistic hesitation instead of repeating "I need to think": "We have a lot going on right now", "I am not sure this is a priority", "I do not really know enough about you yet", "I do not want to waste time on another sales call", or "I need to know what I would actually be looking at."
+- Rotate realistic hesitation instead of repeating "I need to think": "Our schedule is packed right now", "I am not sure this is a priority", "I do not really know enough about you yet", "I do not want to waste time on another sales call", or "I need to know what I would actually be looking at."
 - If they ask to send information, say: "You can send it, but honestly that is probably where it will sit."
 - If they ask what you need to think about, give a real but guarded answer: "Mostly whether this is worth my time right now."
 - If they isolate timing/trust/priority and then ask for a short review, you may say: "If it is actually quick and I am not committing to anything, I can look."
@@ -185,17 +213,18 @@ HOW TO RESPOND:
 - Do not volunteer a meeting.
 - If they only ask whether you got the info, say: "I glanced at it, but I have not really had time to do anything with it."
 - If they ask what is stopping you, say: "I am not sure it is worth changing anything right now."
-- If they ask to follow up later without isolating the issue, say: "Maybe. We have a lot going on."
+- If they ask to follow up later without isolating the issue, say: "Maybe, but our schedule is packed right now."
 - Only agree to an appointment if the applicant re-establishes context, isolates what is stopping you, and asks for a specific review time.
 ${earnedAgreementGuidance}
 ${realisticDialogueGuidance}
 ${salesAdvisorRealismGuidance}
+${skillScreeningGuidance}
 
 SCENARIO-SPECIFIC CALIBRATION:
 - A strong setter should re-establish context, ask what you thought of what was sent, and isolate what stopped you from moving forward.
 - If they uncover a real concern and ask for a concrete review time with the owner/closer, you can agree.
 - If they just ask whether you received the information or ask when to follow up again, keep stalling.
-- Rotate realistic follow-up concerns instead of repeating "we have a lot going on": "I glanced at it but did not dig in", "I am not sure what I am supposed to compare it to", "We have been busy with jobs", "I do not want to get pulled into a long pitch", or "I would need a clear reason to spend time on it."
+- Rotate realistic follow-up concerns instead of repeating one stall: "I glanced at it but did not dig in", "I am not sure what I am supposed to compare it to", "We have been busy with jobs", "I do not want to get pulled into a long pitch", or "I would need a clear reason to spend time on it."
 - If the applicant starts as if this is a fresh cold call, be confused: "Wait, are you following up on something you sent, or is this a new pitch?"
 - If they mention a website without context, ask: "Are you talking about the thing you sent over, or are you trying to sell me a website?"
 - If they ask what stopped you from reviewing it, answer: "Nothing dramatic. It just did not feel urgent."
@@ -283,6 +312,23 @@ function durationSeconds(startedAt, endedAt, fallback) {
   const end = endedAt ? new Date(endedAt).getTime() : NaN;
   if (Number.isFinite(start) && Number.isFinite(end) && end >= start) return Math.round((end - start) / 1000);
   return null;
+}
+
+function applicantLines(transcript) {
+  return String(transcript || '')
+    .split('\\n')
+    .filter((line) => /^\\s*Applicant\\s*:/i.test(line))
+    .map((line) => line.replace(/^\\s*Applicant\\s*:\\s*/i, '').trim())
+    .filter(Boolean);
+}
+
+function capScore(current, cap, reason, review) {
+  if (!Number.isFinite(current)) return current;
+  if (!review.disqualifying_signals) review.disqualifying_signals = [];
+  if (!review.concerns) review.concerns = [];
+  if (!review.disqualifying_signals.includes(reason)) review.disqualifying_signals.push(reason);
+  if (!review.concerns.includes(reason)) review.concerns.push(reason);
+  return Math.min(current, cap);
 }
 
 const incoming = $input.first().json || {};
@@ -384,7 +430,7 @@ if (transcript && hasApplicantSpeech(transcript)) {
     messages: [
       {
         role: 'system',
-        content: 'You are a strict appointment-setter hiring evaluator using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical B2B appointment setting. Score only the applicant behavior in the transcript. Do not reward mere politeness, agreeing, or generic follow-up. A trained setter should lower resistance, listen, identify the true objection under the brush-off, ask concise truth-seeking questions, respectfully challenge avoidance, and ask for a concrete appointment/review next step. Penalize accepting stalls such as "send me information", "let me think about it", "we get referrals", or "we are not interested" at face value. Penalize info-dumping, over-explaining, arguing, sounding needy, no attempt beyond the first brush-off, and ending with vague follow-up. If a call ends early by silence timeout, customer-ended-call, unknown, or client disconnect before the applicant handles the second objection or asks for a concrete next step, treat that as a major control/listening failure and normally score it below 45. Do not give a strong score to a short call just because the applicant sounded pleasant. Return only valid JSON.'
+        content: 'You are a strict appointment-setter hiring evaluator using a sales-advisor rubric informed by NEPQ, No Resistance Sales, Josh Lyons discovery depth, and practical B2B appointment setting. Score only the applicant behavior in the transcript. Do not reward mere politeness, agreeing, or generic follow-up. A trained setter should lower resistance, listen, identify the true objection under the brush-off, ask concise truth-seeking questions, respectfully challenge avoidance, and ask for a concrete appointment/review next step. Penalize presentation-before-discovery: long website/marketing pitches, generic claims about more bookings, or telling the owner what they need before learning anything. Penalize accepting stalls such as "send me information", "let me think about it", "we get referrals", or "we are not interested" at face value. Penalize info-dumping, over-explaining, arguing, sounding needy, no attempt beyond the first brush-off, and ending with vague follow-up. If a call ends early by silence timeout, customer-ended-call, unknown, or client disconnect before the applicant handles the second objection or asks for a concrete next step, treat that as a major control/listening failure and normally score it below 45. Do not give a strong score to a short call just because the applicant sounded pleasant. Return only valid JSON.'
       },
       {
         role: 'user',
@@ -411,6 +457,9 @@ if (transcript && hasApplicantSpeech(transcript)) {
               'When should I follow up?',
               'Sounds good, have a nice day.',
               'Long product pitch without a question.',
+              'Pitching website, Google, rankings, reviews, or bookings before asking useful discovery questions.',
+              'Making generic claims like "this will get you more bookings" without evidence from the owner.',
+              'Asking for email, number, callback, or permission to send details as the main next step.',
               'Arguing with the prospect instead of leading calmly.',
               'Only one applicant response followed by silence or hangup.',
               'The applicant lets the call die after the prospect gives a second objection.'
@@ -419,6 +468,10 @@ if (transcript && hasApplicantSpeech(transcript)) {
               'No captured applicant speech: score 0.',
               'Applicant speech captured but no answer to the prospect follow-up/second objection: cap at 35.',
               'Silence timeout/customer-ended/unknown under 60 seconds with no specific appointment ask: cap at 40.',
+              'Long pitch or info dump before discovery: cap at 58.',
+              'Generic marketing/website pitch with fewer than two useful questions: cap at 55.',
+              'Offering to send info, get email/number, call back, or follow up without a concrete appointment ask: cap at 45.',
+              'Two or more applicant turns without any useful discovery or objection-isolation question: cap at 52.',
               'No concrete appointment/review-time ask anywhere in the transcript: cap at 60.',
               'Appointment booked without isolating the real objection: usually 45-65, not an automatic pass.'
             ]
@@ -473,6 +526,25 @@ if (transcript && hasApplicantSpeech(transcript)) {
   };
   const parsedScore = Number(aiReview.overall_score ?? aiReview.overallScore ?? aiReview.score);
   if (Number.isFinite(parsedScore)) backendScore = Math.max(0, Math.min(100, Math.round(parsedScore)));
+  const applicantTurns = applicantLines(transcript);
+  const applicantText = applicantTurns.join(' ').toLowerCase();
+  const questionCount = (applicantText.match(/\\?/g) || []).length;
+  const appointmentAsk = /\\b(appointment|schedule|book|calendar|meeting|review|quick look|take a look|walk you through|show you|tomorrow|today|morning|afternoon|\\b\\d{1,2}\\s?(am|pm)\\b)\\b/i.test(applicantText);
+  const infoEscape = /\\b(send|shoot|email|text)\\b.{0,35}\\b(info|information|details|link|message|email)\\b|\\bfollow\\s*-?up\\b|\\bcall you back\\b|\\bbest email\\b|\\bbest number\\b/i.test(applicantText);
+  const genericPitch = /\\b(website|google|rank|bookings|more customers|more clients|game changer|reviews|template|business grow|new generation)\\b/i.test(applicantText) && questionCount < 2;
+  const longApplicantTurn = applicantTurns.some((line) => line.split(/\\s+/).filter(Boolean).length >= 90);
+  const discoveryLanguage = /\\b(what do you mean|what makes you|how are you|how do you|get customers|where.*customers|what stopped|what part|timing|priority|concern|worth your time|referrals|look you up|before calling|current|right now|compare|why haven't|why have you not|what are you using|how long|what would you change)\\b/i.test(applicantText);
+  if (backendScore !== null) {
+    if (longApplicantTurn) backendScore = capScore(backendScore, 58, 'Applicant monologued or info-dumped instead of keeping the owner engaged.', aiReview);
+    if (genericPitch) backendScore = capScore(backendScore, 55, 'Applicant pitched generic website/marketing benefits before doing discovery.', aiReview);
+    if (infoEscape && !appointmentAsk) backendScore = capScore(backendScore, 45, 'Applicant accepted the escape hatch by offering information, email, callback, or vague follow-up instead of setting a review time.', aiReview);
+    if (!discoveryLanguage && applicantTurns.length >= 2) backendScore = capScore(backendScore, 52, 'Applicant did not ask useful discovery or objection-isolation questions.', aiReview);
+    if (/max duration/i.test(endedReason || '') && !appointmentAsk) backendScore = capScore(backendScore, 48, 'Call hit max duration without a concrete appointment or review-time ask.', aiReview);
+    if (appointmentAsk && !discoveryLanguage) backendScore = capScore(backendScore, 65, 'Applicant asked for a meeting without isolating the real objection first.', aiReview);
+    aiReview.overall_score = backendScore;
+    if (backendScore < 50) aiReview.recommendation = 'poor_fit';
+    else if (backendScore < 75 && aiReview.recommendation === 'strong_fit') aiReview.recommendation = 'manual_review';
+  }
   summary = summary || aiReview.summary || '';
   structuredOutput = {
     ...(structuredOutput && typeof structuredOutput === 'object' ? structuredOutput : {}),
@@ -668,6 +740,15 @@ if (vapiKey) {
           : undefined,
         serverUrl: webhookUrl,
         serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
+        endCallMessage: "I have to jump. Take care.",
+        endCallPhrases: [
+          "I have to jump. Take care.",
+          "I need to jump. Take care.",
+          "I am going to pass for now. Take care.",
+          "I think we are going in circles, so I am going to pass for now. Take care.",
+          "You can send it if you want, but I have to jump. Take care.",
+          "We are probably fine for now. Thanks for reaching out."
+        ],
         maxDurationSeconds: 180,
         analysisPlan: {
           summaryPlan: { enabled: false },
