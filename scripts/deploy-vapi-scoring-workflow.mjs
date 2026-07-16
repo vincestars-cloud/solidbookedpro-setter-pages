@@ -780,6 +780,10 @@ if (vapiKey) {
           voiceId: "8sGzMkj2HZn6rYwGx6G0",
           speed: 0.89
         },
+        startSpeakingPlan: {
+          waitSeconds: 0.4,
+          smartEndpointingEnabled: true
+        },
         serverUrl: webhookUrl,
         serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
         endCallMessage: "I have to jump. Take care.",
