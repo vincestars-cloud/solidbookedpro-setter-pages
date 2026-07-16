@@ -14,6 +14,7 @@ const normalizeCode = `
 const body = $input.first().json.body || $input.first().json || {};
 const ADMIN_TOKEN = ${JSON.stringify(adminToken)};
 const calendarUrl = body.calendarUrl || 'https://calendar.app.google/gbRS4eD65Qw1W8bo8';
+const videoUrl = body.videoUrl || 'https://setter.solidbookedpro.com/media/appt_setter_0_v3.mp4';
 const type = String(body.type || '').trim();
 const email = String(body.email || body.normalized_email || '').trim().toLowerCase();
 const name = String(body.name || body.fullName || body.preferredName || '').trim();
@@ -52,6 +53,9 @@ Thank you for completing the SolidBooked Pro appointment setter application.
 
 We reviewed your submission and would like you to schedule an interview here:
 \${calendarUrl}
+
+After you schedule, please watch this short video before your interview:
+\${videoUrl}
 
 Please choose a time that works for you.
 
@@ -141,8 +145,20 @@ async function n8n(path, options = {}) {
   return body;
 }
 
-const workflows = await n8n("/workflows?limit=250");
-const matches = (workflows.data || workflows || []).filter((item) => item.name === workflowName);
+async function listAllWorkflows() {
+  const all = [];
+  let cursor = "";
+  for (let page = 0; page < 20; page += 1) {
+    const response = await n8n(`/workflows?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+    all.push(...(response.data || response || []));
+    cursor = response.nextCursor || "";
+    if (!cursor) break;
+  }
+  return all;
+}
+
+const workflows = await listAllWorkflows();
+const matches = workflows.filter((item) => item.name === workflowName);
 const existing = matches.find((item) => item.active) || matches[0];
 let deployed;
 if (existing?.id) {

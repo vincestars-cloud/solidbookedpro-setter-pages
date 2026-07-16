@@ -11,6 +11,7 @@ const setterOutboundEmailWebhook =
   process.env.NEXT_PUBLIC_SETTER_OUTBOUND_EMAIL_WEBHOOK ||
   "https://n8n.americanlifeteam.com/webhook/solidbooked-setter-outbound-email";
 const manualInterviewCalendarUrl = "https://calendar.app.google/gbRS4eD65Qw1W8bo8";
+const postScheduleVideoUrl = "https://setter.solidbookedpro.com/media/appt_setter_0_v3.mp4";
 const fitStatuses = [
   { value: "", label: "No fit status" },
   { value: "a_player", label: "A-Player" },
@@ -317,7 +318,8 @@ export function AdminDashboard() {
           type: statusEmail.type,
           email,
           name,
-          calendarUrl: manualInterviewCalendarUrl
+          calendarUrl: manualInterviewCalendarUrl,
+          videoUrl: postScheduleVideoUrl
         })
       });
       if (!response.ok) throw new Error(`Email workflow returned ${response.status}.`);
