@@ -249,6 +249,11 @@ textarea.control { min-height: 130px; resize: vertical; }
 .admin-status-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; border: 1px solid #d7e2f1; border-radius: 14px; background: #f8fbff; }
 .admin-status-panel label { display: grid; gap: 6px; min-width: 0; }
 .admin-status-panel span { color: var(--muted); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+.email-status-panel { display: grid; gap: 8px; padding: 12px; border: 1px solid #d7e2f1; border-radius: 14px; background: #fff; }
+.email-status-panel > span { color: var(--muted); font-size: 11px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+.email-status-panel > p { margin: 0; color: var(--muted); font-size: 13px; }
+.email-status-panel .compact-list { padding: 0; }
+.email-status-panel .compact-row { align-items: flex-start; background: #f8fbff; }
 .admin-answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .answer-card { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcff; }
 .answer-card span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }

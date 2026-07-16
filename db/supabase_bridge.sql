@@ -928,7 +928,7 @@ begin
       'call_library_average_percent', coalesce(round(me.call_library_average_percent)::integer, 0),
       'post_schedule_video_percent', coalesce(round(me.post_schedule_video_percent)::integer, 0),
       'post_schedule_video_completed', coalesce(me.post_schedule_video_completed, false)
-    ) order by coalesce(mc.average_score, a.internal_score, 0) desc, a.started_at desc), '[]'::jsonb)
+    ) order by coalesce(a.internal_score, 0) desc, coalesce(mc.average_score, 0) desc, a.started_at desc), '[]'::jsonb)
     into rows_json
     from public.sbp_setter_applicants a
     left join (
@@ -1079,6 +1079,7 @@ begin
           'email', applicant.normalized_email,
           'name', applicant.full_name,
           'calendarUrl', 'https://calendar.app.google/gbRS4eD65Qw1W8bo8',
+          'videoUrl', 'https://setter.solidbookedpro.com/media/appt_setter_0_final.mp4',
           'source', 'admin_manual_request'
         )
       );

@@ -11,7 +11,7 @@ const setterOutboundEmailWebhook =
   process.env.NEXT_PUBLIC_SETTER_OUTBOUND_EMAIL_WEBHOOK ||
   "https://n8n.americanlifeteam.com/webhook/solidbooked-setter-outbound-email";
 const manualInterviewCalendarUrl = "https://calendar.app.google/gbRS4eD65Qw1W8bo8";
-const postScheduleVideoUrl = "https://setter.solidbookedpro.com/media/appt_setter_0_v3.mp4";
+const postScheduleVideoUrl = "https://setter.solidbookedpro.com/media/appt_setter_0_final.mp4";
 const fitStatuses = [
   { value: "", label: "No fit status" },
   { value: "a_player", label: "A-Player" },
@@ -323,9 +323,28 @@ export function AdminDashboard() {
         })
       });
       if (!response.ok) throw new Error(`Email workflow returned ${response.status}.`);
+      await saveEmailStatusNote(applicant.id, statusEmail.type);
       setLoadMessage(statusEmail.type === "bad_fit_rejection" ? "Status saved and rejection email requested." : "Status saved and interview email requested.");
     } catch (error) {
       setLoadMessage(error instanceof Error ? `Status saved, but email was not sent: ${error.message}` : "Status saved, but email was not sent.");
+    }
+  }
+
+  async function saveEmailStatusNote(applicantId: string, emailType: string) {
+    const noteText =
+      emailType === "bad_fit_rejection"
+        ? "Rejection email was requested from the admin dashboard."
+        : `Manual interview email was requested from the admin dashboard. Calendar: ${manualInterviewCalendarUrl}. Video: ${postScheduleVideoUrl}.`;
+    if (bridgeMode) {
+      await setterBridgeRequest("admin_note", { token, id: applicantId, note: noteText }).catch(() => null);
+      return;
+    }
+    if (!staticPagesMode) {
+      await fetch(`/api/admin/applicants/${applicantId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-token": token },
+        body: JSON.stringify({ note: noteText })
+      }).catch(() => null);
     }
   }
 
@@ -469,12 +488,12 @@ export function AdminDashboard() {
                 <th>Desired pay</th>
                 <th>Application status</th>
                 <th>Call listening</th>
-                <th>Mock calls</th>
+                <th>AI scores</th>
                 <th>Fit status</th>
+                <th>Mock calls</th>
                 <th>Interview status</th>
                 <th>Start date</th>
                 <th>Availability</th>
-                <th>AI scores</th>
                 <th>End video</th>
                 <th>Vocaroo link</th>
                 <th>Appointment setting experience</th>
@@ -490,12 +509,12 @@ export function AdminDashboard() {
                   <td>{applicant.desired_hourly_pay ? `$${applicant.desired_hourly_pay}/hr` : ""}</td>
                   <td>{formatStatusLabel(applicant.application_status)}</td>
                   <td>{formatPercent(getCallLibraryAveragePercent(applicant))}</td>
-                  <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
+                  <td><ScoreBreakdownCell applicant={applicant} /></td>
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
+                  <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
                   <td>{formatStatusLabel(applicant.interview_status || "not_displayed")}</td>
                   <td>{formatDate(applicant.earliest_start_date)}</td>
                   <td>{formatAvailability(applicant.availability_est)}</td>
-                  <td><ScoreBreakdownCell applicant={applicant} /></td>
                   <td>{formatPercent(getPostScheduleVideoPercent(applicant))}</td>
                   <td>{applicant.vocaroo_url ? <a className="table-link" href={applicant.vocaroo_url} target="_blank" rel="noreferrer">Open link</a> : ""}</td>
                   <td>{truncate(applicant.appointment_setting_experience || "", 140)}</td>
@@ -542,6 +561,7 @@ export function AdminDashboard() {
                     </select>
                   </label>
                 </section>
+                <EmailRequestStatus events={selected.events} notes={selected.notes} />
                 <div className="admin-answer-grid">
                   <Answer label="Preferred name" value={selected.applicant.preferred_name} />
                   <Answer label="Desired pay" value={selected.applicant.desired_hourly_pay ? `$${selected.applicant.desired_hourly_pay}/hr` : ""} />
@@ -1022,6 +1042,51 @@ function NoteList({ notes }: { notes: Array<Record<string, unknown>> }) {
   );
 }
 
+function EmailRequestStatus({ events, notes }: { events: Array<Record<string, unknown>>; notes: Array<Record<string, unknown>> }) {
+  const emailEvents = events.filter((event) => {
+    const type = String(event.event_type || event.eventType || "");
+    return type === "manual_interview_email_requested" || type === "rejection_email_requested";
+  });
+  const emailNotes = notes.filter((item) => /email was requested/i.test(String(item.note || "")));
+  if (!emailEvents.length && !emailNotes.length) {
+    return (
+      <section className="email-status-panel">
+        <span>Email status</span>
+        <p>No manual interview or rejection email request has been saved for this applicant yet.</p>
+      </section>
+    );
+  }
+  return (
+    <section className="email-status-panel">
+      <span>Email status</span>
+      <div className="compact-list">
+        {emailEvents.map((event, index) => {
+          const type = String(event.event_type || event.eventType || "");
+          const metadata = (event.metadata || {}) as Record<string, unknown>;
+          return (
+            <div className="compact-row" key={`event-${String(event.id || index)}`}>
+              <div>
+                <strong>{type === "manual_interview_email_requested" ? "Manual interview email requested" : "Rejection email requested"}</strong>
+                <span>{[metadata.email, metadata.calendarUrl && `Calendar: ${metadata.calendarUrl}`, metadata.videoUrl && `Video: ${metadata.videoUrl}`].filter(Boolean).join(" · ")}</span>
+              </div>
+              <span className="media-meta">{formatDateTime(String(event.occurred_at || event.occurredAt || ""))}</span>
+            </div>
+          );
+        })}
+        {emailNotes.map((item, index) => (
+          <div className="compact-row" key={`note-${String(item.id || index)}`}>
+            <div>
+              <strong>Admin email note</strong>
+              <span>{String(item.note || "")}</span>
+            </div>
+            <span className="media-meta">{formatDateTime(String(item.created_at || item.createdAt || ""))}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Detail({ title, value }: { title: string; value: unknown }) {
   return (
     <details className="admin-detail-block">
@@ -1125,6 +1190,8 @@ function getMockCallsCompleted(applicantId: string, applicants: ApplicantRecord[
 
 function getApplicantScore(applicant: ApplicantRecord) {
   const withAggregates = applicant as ApplicantRecord & { overall_score?: number; overallScore?: number; mockAverageScore?: number };
+  const computed = computeVisibleOverallScore(applicant);
+  if (computed !== null && computed !== undefined) return computed;
   return (
     getOptionalScore(applicant.internal_score) ??
     getOptionalScore(withAggregates.overall_score) ??
@@ -1137,11 +1204,31 @@ function getApplicantScore(applicant: ApplicantRecord) {
   );
 }
 
+function computeVisibleOverallScore(applicant: ApplicantRecord) {
+  const applicationScore = getOptionalScore(applicant.ai_application_score);
+  if (applicationScore === null || applicationScore === undefined) return null;
+  const callAverage = getCallLibraryAveragePercent(applicant);
+  const mockAverage = getOptionalScore(applicant.mock_average_score);
+  const mockScores = [getMockCallScore(applicant, 1), getMockCallScore(applicant, 2), getMockCallScore(applicant, 3)].filter(
+    (score): score is number => score !== null && score !== undefined
+  );
+  const mockScoreSource = mockAverage !== null && mockAverage !== undefined
+    ? mockAverage
+    : mockScores.length
+      ? mockScores.reduce((sum, score) => sum + score, 0) / mockScores.length
+      : null;
+  return (
+    Math.min(70, Math.max(0, applicationScore)) +
+    scoreCallListeningForDisplay(callAverage, Number(applicant.call_library_opened || 0)) +
+    scoreMockCallsForDisplay(mockScoreSource)
+  );
+}
+
 function getScoreBreakdown(applicant: ApplicantRecord) {
   const applicationScore = getOptionalScore(applicant.ai_application_score);
   const resumeFallback = getOptionalScore(applicant.resume_score);
   return {
-    overall: getOptionalScore(applicant.internal_score),
+    overall: computeVisibleOverallScore(applicant) ?? getOptionalScore(applicant.internal_score),
     application: {
       value: applicationScore ?? resumeFallback,
       denominator: applicationScore !== null && applicationScore !== undefined ? 70 : 10
@@ -1150,6 +1237,22 @@ function getScoreBreakdown(applicant: ApplicantRecord) {
     mock2: getMockCallScore(applicant, 2),
     mock3: getMockCallScore(applicant, 3)
   };
+}
+
+function scoreCallListeningForDisplay(averagePercent: number, opened: number) {
+  if (averagePercent >= 75 || opened >= 3) return 10;
+  if (averagePercent >= 40 || opened >= 2) return 6;
+  if (opened >= 1 || averagePercent > 0) return 3;
+  return 0;
+}
+
+function scoreMockCallsForDisplay(averageScore: number | null | undefined) {
+  if (averageScore === null || averageScore === undefined) return 0;
+  if (averageScore >= 85) return 20;
+  if (averageScore >= 75) return 16;
+  if (averageScore >= 65) return 10;
+  if (averageScore >= 55) return 5;
+  return 0;
 }
 
 function getMockCallScore(applicant: ApplicantRecord, mockCallNumber: 1 | 2 | 3) {
