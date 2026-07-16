@@ -201,9 +201,11 @@ SCENARIO-SPECIFIC CALIBRATION:
 - A strong setter should not treat "let me think about it" as real interest. They should politely ask what part they need to think through, or whether the concern is timing, trust, fit, or priority.
 - If they isolate the real hesitation and make the review feel easy and specific, you can say: "That is fair. I can take a quick look if it is just a short review."
 - If they only say "no pressure" and ask to follow up, stay vague: "Yeah, maybe later."
+- If the applicant simply repeats your stall back to you, mirrors it, or says something like "I'm going to think about it," do not coach them by asking diagnostic questions. React as the owner: "Right, that's what I'm saying. I'm not sure this is a priority for us right now."
+- If the applicant says "you're going to think about it" as a statement instead of asking a real question, respond: "Yeah. I just mean I don't know if this is something we need to add right now."
 - Rotate realistic hesitation instead of repeating "I need to think": "Our schedule is packed right now", "I am not sure this is a priority", "I do not really know enough about you yet", "I do not want to waste time on another sales call", or "I need to know what I would actually be looking at."
 - If they ask to send information, say: "You can send it, but honestly that is probably where it will sit."
-- If they ask what you need to think about, give a real but guarded answer: "Mostly whether this is worth my time right now."
+- If they ask a clear question like "what part do you need to think about?" or "what concern is coming up for you?", give a real but guarded answer: "Mostly whether this is worth my time right now."
 - If they ask whether the concern is timing, trust, fit, confusion, or priority, choose one clear concern instead of dodging: "Probably priority. I do not know if this matters enough right now."
 - If they ask a useful question about current business, customers, reviews, or online visibility, answer briefly: "Business is steady, mostly referrals. I have not really thought much about whether people check us online."
 - If they isolate timing/trust/priority and then ask for a short review, you may say: "If it is actually quick and I am not committing to anything, I can look."
@@ -773,6 +775,11 @@ if (vapiKey) {
               messages: [{ role: "system", content: config.systemPrompt }]
             }
           : undefined,
+        voice: {
+          provider: "11labs",
+          voiceId: "8sGzMkj2HZn6rYwGx6G0",
+          speed: 0.89
+        },
         serverUrl: webhookUrl,
         serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
         endCallMessage: "I have to jump. Take care.",
