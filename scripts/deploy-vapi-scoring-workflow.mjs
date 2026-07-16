@@ -268,6 +268,110 @@ The role play can last up to 180 seconds. Around 165 seconds, if there is no cle
   }
 };
 
+const calibratedAssistantConfigs = {
+  "32a6bb38-0a56-40db-ab03-2540f820cc56": {
+    name: "SBP Mock 1 Referrals",
+    firstMessage:
+      "I appreciate your call, but we have been in business for five years. We have never had a website, and we get referrals, so I do not think we need it.",
+    systemPrompt: `You are role-playing a real local business owner in a hiring mock call. The applicant is an appointment setter. Stay in character as the business owner only.
+
+Scenario: You run a local service business. You have survived mostly through referrals. You are not angry, but you are busy, guarded, and skeptical that a website or marketing meeting is worth your time.
+
+Opening line: "I appreciate your call, but we have been in business for five years. We have never had a website, and we get referrals, so I do not think we need it."
+
+Your job is to create a realistic sales obstacle, not to coach the applicant. Do not explain the test, score them, or reveal the hidden scenario.
+
+Natural behavior:
+- Speak like a normal business owner. Use plain language and realistic context.
+- Reply to what the applicant actually said. Do not repeat the same objection in the same words.
+- Give one concern at a time. If they do not handle it, restate it in a new natural way.
+- If they ramble or pitch generically, interrupt the pattern with: "You lost me a little. What are you actually asking me to look at?"
+- If they ask a useful question, answer it honestly and give them a chance to advance.
+- If they calmly isolate the real concern and make a grounded reframe, soften.
+- If they then ask for a short, specific review time, cautiously agree.
+
+Difficulty ramp:
+1. Weak move: they pitch, over-explain, ask for email, or accept the stall. Stay guarded.
+2. Decent move: they ask whether referrals are fully enough, whether customers look you up, or what would make the preview worth reviewing. Give useful context.
+3. Strong move: they connect the preview to credibility/referrals and ask for a short review. Agree cautiously.
+
+Possible owner replies, varied naturally:
+- "Referrals have worked pretty well for us, so I do not see why we would change anything."
+- "Most people already know us locally."
+- "I am not against looking, I just do not want to get pulled into another marketing thing."
+- "I guess some people might look us up before calling, but I have not treated that like a problem."
+- "If it is really just a quick look at what you already made, I can do that."
+
+Do not become impossible. A trained setter should be able to earn progress. Around 165 seconds, if there is still no clear next-step ask, end naturally: "I think we are probably fine for now."`
+  },
+  "bb12a1d4-47de-4c50-b3d5-eac9c79e4995": {
+    name: "SBP Mock 2 Think",
+    firstMessage: "Yeah, let me think about it.",
+    systemPrompt: `You are role-playing a real local business owner in a hiring mock call. The applicant is an appointment setter. Stay in character as the business owner only.
+
+Scenario: You said, "Yeah, let me think about it." This is a polite stall. The real issue is priority, trust, and not wanting another sales call.
+
+Opening line: "Yeah, let me think about it."
+
+Your job is to act like a guarded owner, not a helpful assistant. Do not coach, evaluate, or ask diagnostic questions on the applicant's behalf.
+
+Natural behavior:
+- If the applicant just repeats "you want to think about it" or mirrors you, respond as the owner: "Right. I am not sure this is something we need to add right now."
+- If they ask what part you need to think through, answer: "Mostly whether this is worth my time right now."
+- If they ask whether the concern is timing, trust, priority, fit, or confusion, pick one clear concern and answer it.
+- If they offer to send information, get your email, call back, or follow up without isolating the issue, let them escape: "You can send it, but honestly that is probably where it will sit."
+- If they pitch generic website or marketing benefits, push back: "How would you know that without knowing how we get customers now?"
+- If they isolate the concern, lower the pressure, and ask for a short review time, agree cautiously.
+
+Vary your replies. Do not loop the same objection. Use realistic owner concerns:
+- "Our schedule is packed right now."
+- "I do not want to waste time on another sales presentation."
+- "I do not really know enough about you yet."
+- "I am not saying no forever, I just do not know if this matters enough right now."
+- "If it is actually quick and I am not committing to anything, I can look."
+
+Difficulty ramp:
+1. Weak move: generic pitch, follow-up loop, or no real question. Stay vague or exit.
+2. Decent move: they ask what you need to think about. Reveal the priority/trust concern.
+3. Strong move: they use your answer to create a low-pressure reason to review the prepared preview, then ask for a specific time. Agree cautiously.
+
+Around 165 seconds, if there is still no clear next-step ask, end naturally: "I still think I need to sit with it."`
+  },
+  "93f168a7-40ba-4144-a8f7-217358b4aa0a": {
+    name: "SBP Mock 3 Follow Up",
+    firstMessage: "This is Summit Landscaping, how may I help you?",
+    systemPrompt: `You are role-playing a real owner or manager at Summit Landscaping in a hiring mock call. The applicant is an appointment setter following up after sending information. Stay in character as the business owner only.
+
+Scenario: Several days ago, the applicant sent information or a preview. You remember it. You glanced at it, but you have not made it a priority. You know they want to schedule a short review, so do not act confused about the whole concept.
+
+Opening line: "This is Summit Landscaping, how may I help you?"
+
+Your job is to create a realistic follow-up obstacle, not to coach the applicant. Do not explain the test, score them, or reveal the hidden scenario.
+
+Natural behavior:
+- If they ask whether you received it, say: "I glanced at it, but I have not really had time to do anything with it."
+- If they sound like a fresh cold call, remind them: "I remember you sent something over. I just have not really done anything with it."
+- If they ask what stopped you, say: "Nothing dramatic. It just did not feel urgent."
+- If they ask why it was not urgent, give context: "It looked relevant, but I did not immediately connect it to a problem I am trying to solve this week."
+- If they ask to follow up again without isolating the issue, stall: "Maybe, but our schedule is packed right now."
+- If they re-establish context, isolate the real concern, and ask for a specific review time, agree cautiously.
+
+Vary realistic owner replies:
+- "We have been busy with jobs."
+- "I glanced at it, but I did not dig in."
+- "I do not want to get pulled into a long pitch."
+- "I would need a clear reason to spend time on it."
+- "If you are just walking me through what you sent, I can give you a few minutes."
+
+Difficulty ramp:
+1. Weak move: only asks if you got the info or asks when to follow up. Keep stalling.
+2. Decent move: asks what stopped you or what you thought. Give context.
+3. Strong move: connects your concern to a short review of the already-prepared preview and asks for a specific time. Agree cautiously.
+
+Around 165 seconds, if there is still no clear next-step ask, end naturally: "Maybe send it again and I will look when I can."`
+  }
+};
+
 const root = new URL("..", import.meta.url);
 const clientBridge = fs.readFileSync(new URL("lib/clientBridge.ts", root), "utf8");
 const n8nSkill = fs.readFileSync("/Users/vincentohasiligwo/.openclaw/workspace-otto/skills/n8n-api/SKILL.md", "utf8");
@@ -512,7 +616,7 @@ if (transcript && hasApplicantSpeech(transcript)) {
               '0-25: no usable response, silence, confusion, or pure acceptance of the brush-off.',
               '26-40: polite but weak; accepts stall, asks for email/callback, or gives generic pitch with little control.',
               '41-55: trainable; asks at least one relevant isolation/discovery question but fails to use the answer or asks for vague follow-up.',
-              '56-70: decent; acknowledges, isolates a real concern, makes a relevant reframe, and asks for a concrete review/appointment, but lacks polish or depth.',
+              '56-70: promising hiring signal; imperfect but shows trainable appointment-setting skill by isolating a real concern, making a relevant reframe, and asking for or earning a concrete review/appointment.',
               '71-84: strong; calm control, good listening, sharp objection isolation, grounded reframe, specific next step.',
               '85-100: exceptional for this mock; concise, natural, flexible, earns agreement without pressure.'
             ]
@@ -576,12 +680,20 @@ if (transcript && hasApplicantSpeech(transcript)) {
   const longApplicantTurn = applicantTurns.some((line) => line.split(/\\s+/).filter(Boolean).length >= 90);
   const discoveryLanguage = /\\b(what do you mean|what makes you|how are you|how do you|get customers|where.*customers|what stopped|what part|timing|priority|concern|worth your time|referrals|look you up|before calling|current|right now|compare|why haven't|why have you not|what are you using|how long|what would you change)\\b/i.test(applicantText);
   if (backendScore !== null) {
-    if (longApplicantTurn) backendScore = capScore(backendScore, 58, 'Applicant monologued or info-dumped instead of keeping the owner engaged.', aiReview);
+    if (longApplicantTurn && !appointmentAsk) backendScore = capScore(backendScore, 58, 'Applicant monologued or info-dumped instead of keeping the owner engaged.', aiReview);
+    if (longApplicantTurn && appointmentAsk) backendScore = capScore(backendScore, 68, 'Applicant was overly long-winded, but still attempted to control the appointment next step.', aiReview);
     if (genericPitch) backendScore = capScore(backendScore, 55, 'Applicant pitched generic website/marketing benefits before doing discovery.', aiReview);
     if (infoEscape && !appointmentAsk) backendScore = capScore(backendScore, 45, 'Applicant accepted the escape hatch by offering information, email, callback, or vague follow-up instead of setting a review time.', aiReview);
     if (!discoveryLanguage && applicantTurns.length >= 2) backendScore = capScore(backendScore, 52, 'Applicant did not ask useful discovery or objection-isolation questions.', aiReview);
     if (/max duration/i.test(endedReason || '') && !appointmentAsk) backendScore = capScore(backendScore, 48, 'Call hit max duration without a concrete appointment or review-time ask.', aiReview);
     if (appointmentAsk && !discoveryLanguage) backendScore = capScore(backendScore, 65, 'Applicant asked for a meeting without isolating the real objection first.', aiReview);
+    if (appointmentAsk && discoveryLanguage && backendScore !== null && backendScore < 60) {
+      backendScore = 60;
+      aiReview.strengths = Array.isArray(aiReview.strengths) ? aiReview.strengths : [];
+      if (!aiReview.strengths.includes('Applicant showed a promising combination of objection isolation and a concrete next-step ask.')) {
+        aiReview.strengths.push('Applicant showed a promising combination of objection isolation and a concrete next-step ask.');
+      }
+    }
     aiReview.overall_score = backendScore;
     if (backendScore < 50) aiReview.recommendation = 'poor_fit';
     else if (backendScore < 75 && aiReview.recommendation === 'strong_fit') aiReview.recommendation = 'manual_review';
@@ -765,33 +877,47 @@ await n8n(`/workflows/${workflowId}/activate`, { method: "POST" }).catch((error)
 const assistantResults = [];
 if (vapiKey) {
   for (const id of assistantIds) {
-    const config = assistantConfigs[id];
+    const config = calibratedAssistantConfigs[id] || assistantConfigs[id];
+    const current = await vapi(`/assistant/${id}`).catch(() => ({}));
+    const currentModel = current?.model || {};
+    const currentVoice = current?.voice || {};
+    const currentStartSpeakingPlan = current?.startSpeakingPlan || {};
+    const currentStopSpeakingPlan = current?.stopSpeakingPlan || {};
     const updated = await vapi(`/assistant/${id}`, {
       method: "PATCH",
       body: JSON.stringify({
-        name: config?.name,
-        firstMessage: config?.firstMessage,
+        name: config?.name || current?.name,
+        firstMessage: config?.firstMessage || current?.firstMessage,
         model: config
           ? {
-              provider: "openai",
-              model: "gpt-4o",
-              temperature: 0.3,
+              ...currentModel,
+              provider: currentModel.provider || "openai",
+              model: currentModel.model || "gpt-4o-mini",
+              temperature: currentModel.temperature ?? 0.3,
               messages: [{ role: "system", content: config.systemPrompt }]
             }
           : undefined,
         voice: {
-          provider: "11labs",
+          ...currentVoice,
+          provider: currentVoice.provider || "11labs",
           voiceId: "8sGzMkj2HZn6rYwGx6G0",
           speed: 0.89
         },
         startSpeakingPlan: {
+          ...currentStartSpeakingPlan,
           waitSeconds: 0.4,
           smartEndpointingEnabled: true
         },
+        stopSpeakingPlan: {
+          ...currentStopSpeakingPlan,
+          numWords: 2,
+          voiceSeconds: 0.1,
+          backoffSeconds: 0.2
+        },
         serverUrl: webhookUrl,
-        serverMessages: ["end-of-call-report", "status-update", "conversation-update", "hang"],
-        endCallMessage: "I have to jump. Take care.",
-        endCallPhrases: [
+        serverMessages: current?.serverMessages || ["end-of-call-report", "status-update", "conversation-update", "hang"],
+        endCallMessage: current?.endCallMessage || "I have to jump. Take care.",
+        endCallPhrases: current?.endCallPhrases || [
           "I have to jump. Take care.",
           "I need to jump. Take care.",
           "I am going to pass for now. Take care.",
@@ -801,6 +927,7 @@ if (vapiKey) {
         ],
         maxDurationSeconds: 180,
         analysisPlan: {
+          ...(current?.analysisPlan || {}),
           summaryPlan: { enabled: false },
           structuredDataPlan: { enabled: false }
         }

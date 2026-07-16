@@ -11,6 +11,7 @@ with scoring as (
   select
     a.id,
     coalesce(a.ai_application_score, 0) as ai_score,
+    coalesce(a.resume_score, 0) as resume_score,
     coalesce((
       select avg(me.percentage_consumed) filter (where me.started = true or me.seconds_consumed > 0 or me.percentage_consumed > 0)
       from public.sbp_setter_media_engagement me
@@ -43,6 +44,8 @@ computed as (
     mock_max,
     mock_scored,
     completed_calls,
+    resume_score,
+    ai_score,
     hard_flags
   from scoring
 ),
@@ -53,10 +56,14 @@ updated as (
     qualification_status = case
       when array_length(c.hard_flags, 1) is not null then 'not_qualified'
       when c.score >= 75 and c.completed_calls = 3 and (c.mock_avg >= 45 or c.mock_max >= 60) then 'qualified'
+      when c.completed_calls = 3 and c.ai_score >= 65 and c.resume_score >= 8 and c.mock_max >= 60 then 'qualified'
+      when c.completed_calls = 3 and c.ai_score >= 67 and c.mock_avg >= 45 then 'qualified'
       else 'manual_review'
     end,
     interview_status = case
       when c.score >= 75 and c.completed_calls = 3 and (c.mock_avg >= 45 or c.mock_max >= 60) and array_length(c.hard_flags, 1) is null then 'displayed'
+      when c.completed_calls = 3 and c.ai_score >= 65 and c.resume_score >= 8 and c.mock_max >= 60 and array_length(c.hard_flags, 1) is null then 'displayed'
+      when c.completed_calls = 3 and c.ai_score >= 67 and c.mock_avg >= 45 and array_length(c.hard_flags, 1) is null then 'displayed'
       else 'not_displayed'
     end,
     hard_flags = c.hard_flags,

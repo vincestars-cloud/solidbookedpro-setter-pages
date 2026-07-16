@@ -853,6 +853,22 @@ begin
       )
     ) then
       result_status := 'qualified';
+    elsif completed_calls = 3
+      and coalesce(ai_application_score_value, 0) >= 65
+      and coalesce(resume_score_value, 0) >= 8
+      and exists (
+        select 1
+        from public.sbp_setter_mock_calls qualifying_call
+        where qualifying_call.applicant_id = applicant_uuid
+          and qualifying_call.backend_score >= 60
+      )
+    then
+      result_status := 'qualified';
+    elsif completed_calls = 3
+      and coalesce(ai_application_score_value, 0) >= 67
+      and mock_average_score >= 45
+    then
+      result_status := 'qualified';
     else
       result_status := 'manual_review';
     end if;
