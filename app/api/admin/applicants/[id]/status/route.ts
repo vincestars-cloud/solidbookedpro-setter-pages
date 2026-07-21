@@ -12,6 +12,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (body.qualificationStatus) patch.qualification_status = body.qualificationStatus;
   if (body.interviewStatus) patch.interview_status = body.interviewStatus;
   if (body.hiringStageStatus) patch.hiring_stage_status = body.hiringStageStatus;
+  if (body.team !== undefined) patch.team = body.team;
   if (body.reopen === true) {
     patch.reopened_at = new Date().toISOString();
     patch.submitted_at = null;

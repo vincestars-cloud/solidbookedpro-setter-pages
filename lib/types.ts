@@ -14,7 +14,9 @@ export type ApplicationStatus =
   | "rejected"
   | "withdrawn";
 
-export type InterviewStatus = "displayed" | "not_displayed" | "scheduled" | "completed" | "manual_request";
+export type InterviewStatus = "displayed" | "not_displayed" | "scheduled" | "completed" | "manual_request" | "hired" | "terminated";
+
+export type TeamAssignment = "appointment_setter" | "sales_closer" | "customer_success";
 
 export type MockCallStatus = "not_started" | "connecting" | "live" | "ending" | "completed" | "failed";
 
@@ -57,6 +59,7 @@ export type ApplicantRecord = {
   interview_scheduled_at: string | null;
   interview_details: Record<string, unknown> | null;
   hiring_stage_status: string | null;
+  team: TeamAssignment | string | null;
   call_library_average_percent?: number | null;
   call_library_opened?: number | null;
   mock_calls_completed?: number | null;

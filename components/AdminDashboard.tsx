@@ -20,7 +20,13 @@ const fitStatuses = [
 ];
 const pageSize = 25;
 const applicationStatuses = ["started", "step_1_complete", "step_2_complete", "step_3_complete", "mock_calls_in_progress", "application_completed", "interview_scheduled", "interview_completed", "paid_trial", "hired", "rejected", "withdrawn"];
-const interviewStatuses = ["displayed", "not_displayed", "scheduled", "completed", "manual_request"];
+const interviewStatuses = ["displayed", "not_displayed", "scheduled", "completed", "manual_request", "hired", "terminated"];
+const teamOptions = [
+  { value: "", label: "No team" },
+  { value: "appointment_setter", label: "Appointment Setter" },
+  { value: "sales_closer", label: "Sales Closer" },
+  { value: "customer_success", label: "Customer Success" }
+];
 
 type StaticSubmission = {
   applicantId: string;
@@ -273,6 +279,7 @@ export function AdminDashboard() {
         if (patch.applicationStatus) statusOverride.application_status = patch.applicationStatus as any;
         if (patch.interviewStatus) statusOverride.interview_status = patch.interviewStatus as any;
         if (patch.hiringStageStatus !== undefined) statusOverride.hiring_stage_status = patch.hiringStageStatus as any;
+        if (patch.team !== undefined) statusOverride.team = patch.team as any;
         if (patch.reopen) {
           statusOverride.application_status = "started";
           statusOverride.qualification_status = "manual_review";
@@ -492,6 +499,7 @@ export function AdminDashboard() {
                 <th>Fit status</th>
                 <th>Mock calls</th>
                 <th>Interview status</th>
+                <th>Team</th>
                 <th>Start date</th>
                 <th>Availability</th>
                 <th>End video</th>
@@ -513,6 +521,7 @@ export function AdminDashboard() {
                   <td><span className={`pill ${applicant.hiring_stage_status ? "fit-pill" : ""}`}>{formatStatusLabel(applicant.hiring_stage_status || "none")}</span></td>
                   <td>{getMockCallsCompleted(applicant.id, applicants)}/3</td>
                   <td>{formatStatusLabel(applicant.interview_status || "not_displayed")}</td>
+                  <td>{applicant.team ? formatStatusLabel(applicant.team) : ""}</td>
                   <td>{formatDate(applicant.earliest_start_date)}</td>
                   <td>{formatAvailability(applicant.availability_est)}</td>
                   <td>{formatPercent(getPostScheduleVideoPercent(applicant))}</td>
@@ -558,6 +567,12 @@ export function AdminDashboard() {
                     <span>Interview</span>
                     <select className="control" value={selected.applicant.interview_status || "not_displayed"} onChange={(event) => updateStatus({ interviewStatus: event.target.value })}>
                       {interviewStatuses.map((item) => <option key={item} value={item}>{formatStatusLabel(item)}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Team</span>
+                    <select className="control" value={selected.applicant.team || ""} onChange={(event) => updateStatus({ team: event.target.value || null })}>
+                      {teamOptions.map((item) => <option key={item.value || "none"} value={item.value}>{item.label}</option>)}
                     </select>
                   </label>
                 </section>
@@ -837,6 +852,7 @@ function ReadableOperationalSummary({ applicant, events }: { applicant: Applican
         <ReadableField label="Application status" value={formatStatusLabel(applicant.application_status)} />
         <ReadableField label="Fit status" value={formatStatusLabel(applicant.hiring_stage_status || "none")} />
         <ReadableField label="Interview status" value={formatStatusLabel(applicant.interview_status)} />
+        <ReadableField label="Team" value={applicant.team ? formatStatusLabel(applicant.team) : "Unassigned"} />
         <ReadableField label="Started" value={formatDateTime(applicant.started_at)} />
         <ReadableField label="Submitted" value={formatDateTime(applicant.submitted_at)} />
         <ReadableField label="Abandonment point" value={applicant.abandoned_at_step ? `Step ${applicant.abandoned_at_step}` : "None"} />
@@ -1168,6 +1184,7 @@ function staticSubmissionToApplicant(submission: StaticSubmission): ApplicantRec
     interview_scheduled_at: null,
     interview_details: null,
     hiring_stage_status: null,
+    team: null,
     call_library_average_percent: calculateCallLibraryAveragePercent(callRecordings),
     call_library_opened: callRecordings.filter((item) => item.started || item.secondsConsumed > 0 || item.percentageConsumed > 0).length,
     post_schedule_video_percent: postScheduleVideo?.percentageConsumed || null,
@@ -1586,6 +1603,7 @@ function toCsv(applicants: ApplicantRecord[]) {
     "Application status",
     "Fit status",
     "Interview status",
+    "Team",
     "Start date",
     "Availability",
     "AI score breakdown",
@@ -1605,6 +1623,7 @@ function toCsv(applicants: ApplicantRecord[]) {
     formatStatusLabel(a.application_status),
     formatStatusLabel(a.hiring_stage_status || ""),
     formatStatusLabel(a.interview_status || "not_displayed"),
+    a.team ? formatStatusLabel(a.team) : "",
     formatDate(a.earliest_start_date),
     formatAvailability(a.availability_est),
     formatScoreBreakdownText(a),
